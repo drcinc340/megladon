@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MEGLADON — AI Sales Coach | Dinverno Remodeling and Construction</title>
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/jpeg" href="./assets/megladon-emblem.jpg" />
+  <link rel="apple-touch-icon" href="./assets/megladon-emblem.jpg" />
+  <meta name="theme-color" content="#060A12" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <!-- Mobile Header -->
+  <header class="mobile-topbar">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <img src="./assets/megladon-emblem.jpg" alt="Megladon" style="width:36px;height:36px;border-radius:9px;border:1px solid var(--border-cyan);" />
+      <div>
+        <div style="font-weight:900;letter-spacing:0.07em;font-size:1rem;">MEGLADON</div>
+        <div style="font-size:0.66rem;color:var(--text-secondary);">Dinverno Remodeling Sales Dojo</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="mobileMenuBtn">☰ Menu</button>
+  </header>
+
+  <div class="app-shell">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-lockup">
+        <img src="./assets/megladon-emblem.jpg" alt="Megladon Crest" class="brand-emblem" />
+        <div>
+          <div class="brand-title">MEGLADON</div>
+          <div class="brand-sub">Apex AI Sales Coach</div>
+        </div>
+      </div>
+
+      <!-- Active Rep Card -->
+      <div class="rep-switcher-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+          <span class="rep-label-sm" style="margin:0;">Active Closer</span>
+          <button id="addRepQuickBtn" style="background:none;border:none;color:var(--cyan);font-size:0.72rem;font-weight:700;cursor:pointer;">+ New Rep</button>
+        </div>
+        <select id="repSelect" class="rep-select"></select>
+        <div class="rep-rank-row">
+          <span class="rank-pill" id="repRankBadge">Apex Megladon</span>
+          <span id="repXpLabel" style="color:var(--text-secondary);font-weight:700;">0 XP</span>
+        </div>
+        <div class="xp-bar-track">
+          <div class="xp-bar-fill" id="repXpFill" style="width:12%;"></div>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="nav-menu">
+        <button class="nav-btn active" data-view="view-arena">
+          <span class="nav-icon">🦈</span>
+          <span>Roleplay Arena</span>
+        </button>
+        <button class="nav-btn" data-view="view-gauntlet">
+          <span class="nav-icon">⚡</span>
+          <span>Objection Gauntlet</span>
+        </button>
+        <button class="nav-btn" data-view="view-coach">
+          <span class="nav-icon">🧠</span>
+          <span>Ask Coach Megladon</span>
+        </button>
+        <button class="nav-btn" data-view="view-playbook">
+          <span class="nav-icon">📚</span>
+          <span>Masters Playbook</span>
+        </button>
+        <button class="nav-btn" data-view="view-command">
+          <span class="nav-icon">🏆</span>
+          <span>Command Center</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <strong style="color:#e2e8f0;">Dinverno Remodeling and Construction</strong><br />
+        Office: +1 (248) 431-4609<br />
+        <span id="voiceEngineBadge" style="color:var(--emerald);font-weight:600;">● Neural Voice Ready</span>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-area">
+      <!-- ================================================================
+           VIEW 1: ROLEPLAY ARENA (SETUP + LIVE COCKPIT)
+      ================================================================= -->
+      <section class="view-section active" id="view-arena">
+        <!-- SETUP STATE -->
+        <div id="arenaSetup">
+          <div class="page-header">
+            <div>
+              <h1 class="page-title">🦈 In-Home Consultation Roleplay Arena</h1>
+              <p class="page-subtitle">Train live by voice or text against hyper-realistic Southeast Michigan homeowners. Unlock hidden emotional drivers, hold your margin, and earn the close.</p>
+            </div>
+          </div>
+
+          <div id="pendingAssignmentBanner" style="display:none;"></div>
+
+          <h3 style="font-size:0.82rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-secondary);margin-bottom:12px;">
+            1. Choose Your Homeowner Opponent
+          </h3>
+          <div class="grid-3" id="personaGrid"></div>
+
+          <div class="setup-controls-bar">
+            <div class="field-group">
+              <label for="setupTrade">2. DRC Project Trade & Scope</label>
+              <select id="setupTrade" class="input-ctrl"></select>
+            </div>
+            <div class="field-group">
+              <label for="setupDifficulty">3. Sparring Intensity</label>
+              <select id="setupDifficulty" class="input-ctrl">
+                <option value="rookie">🟢 Rookie Warm-Up (Forgiving)</option>
+                <option value="pro" selected>🔵 Pro Closer (Realistic Pushback)</option>
+                <option value="megladon_boss">🦈 MEGLADON BOSS (Brutal Pressure)</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="setupCustomContext">4. Optional Custom Deal Twist</label>
+              <input id="setupCustomContext" type="text" class="input-ctrl" placeholder="e.g., Roof insurance claim denied, corner lot..." />
+            </div>
+            <div>
+              <button class="btn btn-gold" id="launchFullSitBtn" style="width:100%;height:44px;font-size:0.96rem;">
+                🦈 Start Kitchen-Table Sit
+              </button>
+            </div>
+          </div>
+
+          <div id="tradePreviewStrip" class="card" style="margin-top:14px;padding:13px 18px;background:rgba(14,165,233,0.06);border-color:rgba(14,165,233,0.22);font-size:0.84rem;"></div>
+        </div>
+
+        <!-- ACTIVE COCKPIT STATE -->
+        <div id="arenaCockpit" style="display:none;">
+          <div class="cockpit-layout">
+            <!-- Left: Chat + Voice Stage -->
+            <div class="chat-arena">
+              <div class="arena-topbar">
+                <div class="voice-orb-wrap">
+                  <div class="voice-orb" id="liveVoiceOrb">🦈</div>
+                  <div>
+                    <div style="font-weight:800;font-size:1rem;" id="activePersonaTitle">Frank Miller</div>
+                    <div style="font-size:0.75rem;color:var(--text-secondary);" id="activePersonaSub">Livonia, MI • Basement Waterproofing</div>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-secondary);cursor:pointer;margin-right:4px;">
+                    <input type="checkbox" id="autoSpeakToggle" checked />
+                    <span>🔊 Homeowner Voice</span>
+                  </label>
+                  <button class="btn btn-ghost btn-sm" id="nepqBankBtn" title="Open Jeremy Miner 5-Stage NEPQ Questions">
+                    🎯 NEPQ Bank
+                  </button>
+                  <button class="btn btn-ghost btn-sm" id="rescueHintBtn" title="Get 2 word-for-word scripts from Coach Megladon">
+                    🆘 Coach Rescue
+                  </button>
+                  <button class="btn btn-gold btn-sm" id="finishSitBtn">
+                    🏁 Finish & Grade
+                  </button>
+                  <button class="btn btn-danger btn-sm" id="exitSitBtn">
+                    ✕ Exit
+                  </button>
+                </div>
+              </div>
+
+              <div class="transcript-stream" id="transcriptStream"></div>
+
+              <!-- Tactical Hint Drawer -->
+              <div class="hint-drawer" id="hintDrawer">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <strong style="color:var(--gold);font-size:0.82rem;">🦈 COACH MEGLADON LIVE RESCUE — CLICK A SCRIPT TO USE IT:</strong>
+                  <button id="closeHintBtn" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:0.9rem;">✕</button>
+                </div>
+                <div id="hintContent" style="margin-top:6px;font-size:0.81rem;color:#fef3c7;"></div>
+              </div>
+
+              <!-- Composer -->
+              <div class="arena-composer">
+                <div id="recordingStatusBanner" style="display:none;font-size:0.78rem;color:#fda4af;font-weight:700;">
+                  🎙️ Listening... Speak naturally like you're at the kitchen table, then tap the red mic again to send!
+                </div>
+                <div class="composer-row">
+                  <button class="mic-btn" id="micToggleBtn" title="Tap to Talk (Voice Roleplay)">🎙️</button>
+                  <textarea id="repMessageInput" class="input-ctrl" rows="2" placeholder="Tap 🎙️ to speak out loud, or type what you say to the homeowner... (Press Enter to send)"></textarea>
+                  <button class="btn btn-primary" id="sendTurnBtn" style="height:50px;padding:0 22px;">Send ➤</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Telemetry & Coach Earpiece HUD -->
+            <div class="hud-stack">
+              <!-- Live Mathematical Close Gauges -->
+              <div class="hud-card">
+                <div class="hud-title">
+                  <span>🎯 Live Buying Gauges</span>
+                  <span id="closeGateBadge" style="font-size:0.7rem;color:var(--text-muted);">Gate Locked 🔒</span>
+                </div>
+
+                <div class="gauge-item">
+                  <div class="gauge-top">
+                    <span>🛡️ Homeowner Trust <small style="color:var(--text-muted);">(Goal 75%+)</small></span>
+                    <span id="gaugeTrustVal">38%</span>
+                  </div>
+                  <div class="gauge-bar">
+                    <div class="gauge-fill" id="gaugeTrustBar" style="width:38%;background:linear-gradient(90deg,#0284c7,#38bdf8);"></div>
+                  </div>
+                </div>
+
+                <div class="gauge-item">
+                  <div class="gauge-top">
+                    <span>💎 Perceived Value <small style="color:var(--text-muted);">(Goal 70%+)</small></span>
+                    <span id="gaugeValueVal">25%</span>
+                  </div>
+                  <div class="gauge-bar">
+                    <div class="gauge-fill" id="gaugeValueBar" style="width:25%;background:linear-gradient(90deg,#7c3aed,#a78bfa);"></div>
+                  </div>
+                </div>
+
+                <div class="gauge-item" style="margin-bottom:0;">
+                  <div class="gauge-top">
+                    <span>🔥 Urgency / Why Now <small style="color:var(--text-muted);">(Goal 60%+)</small></span>
+                    <span id="gaugeUrgencyVal">20%</span>
+                  </div>
+                  <div class="gauge-bar">
+                    <div class="gauge-fill" id="gaugeUrgencyBar" style="width:20%;background:linear-gradient(90deg,#d97706,#fbbf24);"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Live Coach Whisper -->
+              <div class="hud-card">
+                <div class="hud-title">
+                  <span>🎧 Coach Megladon Earpiece</span>
+                  <button id="speakWhisperBtn" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:0.75rem;font-weight:700;">🔊 Speak</button>
+                </div>
+                <div class="whisper-box" id="liveCoachWhisper">
+                  Welcome to the kitchen table. Set a warm agenda and ask open-ended NEPQ questions!
+                </div>
+              </div>
+
+              <!-- Secret Homeowner Clues Vault -->
+              <div class="hud-card">
+                <div class="hud-title">
+                  <span>🔐 Hidden Homeowner Clues</span>
+                  <span id="cluesCounter">0 / 3 Unlocked</span>
+                </div>
+                <div id="cluesVaultList"></div>
+              </div>
+
+              <!-- Rilla Telemetry -->
+              <div class="hud-card">
+                <div class="hud-title">
+                  <span>📊 Rilla Behavioral Telemetry</span>
+                  <span id="stagePill" style="color:var(--cyan);font-size:0.7rem;">Step 1</span>
+                </div>
+                <div class="telemetry-grid">
+                  <div class="telemetry-stat">
+                    <div class="telemetry-val" id="statTalkRatio">50%</div>
+                    <div class="telemetry-lbl">Rep Talk (Aim 40-50%)</div>
+                  </div>
+                  <div class="telemetry-stat">
+                    <div class="telemetry-val" id="statQuestions">0</div>
+                    <div class="telemetry-lbl">Questions Asked</div>
+                  </div>
+                  <div class="telemetry-stat">
+                    <div class="telemetry-val" id="statFillers">0</div>
+                    <div class="telemetry-lbl">Filler / Weak Words</div>
+                  </div>
+                  <div class="telemetry-stat">
+                    <div class="telemetry-val" id="statEmotion" style="font-size:0.9rem;text-transform:capitalize;">Guarded</div>
+                    <div class="telemetry-lbl">Homeowner Mood</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- DRC Trade Cheat Sheet -->
+              <div class="hud-card">
+                <div class="hud-title"><span>📋 DRC Tiers & Michigan Code</span></div>
+                <div id="hudTradeCheatSheet" style="font-size:0.78rem;color:var(--text-secondary);line-height:1.5;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 2: OBJECTION GAUNTLET (RAPID-FIRE SPARRING + SCRIPTS)
+      ================================================================= -->
+      <section class="view-section" id="view-gauntlet">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">⚡ Rapid-Fire Objection Gauntlet</h1>
+            <p class="page-subtitle">Warm up in 3 minutes before walking up a driveway. Jump straight to price-reveal pushback or study word-for-word master rebuttals.</p>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;">
+            <select id="gauntletTradeSelect" class="input-ctrl" style="min-width:240px;"></select>
+          </div>
+        </div>
+
+        <div class="grid-2" id="objectionGauntletGrid"></div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 3: ASK COACH MEGLADON (LIVE DEAL REHASH & SCRIPT LAB)
+      ================================================================= -->
+      <section class="view-section" id="view-coach">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">🧠 Live Deal Rehash & Script Strategist</h1>
+            <p class="page-subtitle">Sitting in the truck outside a real appointment? Describe the homeowner's pushback and get instant word-for-word closing scripts + copy-ready follow-up texts.</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;" id="quickCoachPrompts">
+            <button class="btn btn-ghost btn-sm coach-preset" data-q="I'm in Troy quoting a $23,490 Better Basement Waterproofing job. Husband says a guy on Facebook quoted $11,000 cash and wants to think about it. Give me the exact kitchen-table script and follow-up text.">💧 $11k Cash Lowballer (Waterproofing)</button>
+            <button class="btn btn-ghost btn-sm coach-preset" data-q="Birmingham couple loved our $88,200 4-Season Sunroom design, nodded the whole time, then said 'We never sign on the first visit, email us the quote and we'll reconnect in spring.' How do I save this deal right now?">☀️ "Never Sign First Visit / Wait Till Spring" (Sunroom)</button>
+            <button class="btn btn-ghost btn-sm coach-preset" data-q="Homeowner in Novi is an automotive engineer asking me to break down our $20,790 roof replacement into exact Home Depot material cost vs labor hours. Give me the exact calm rebuttal.">📐 Engineer Demanding Material/Labor Split (Roofing)</button>
+            <button class="btn btn-ghost btn-sm coach-preset" data-q="I arrived for a $53,000 Kitchen consultation in Royal Oak and only the husband is home—he says his wife is at her sister's and wants me to just write down the numbers for him. Walk me through step-by-step how to play this.">📱 One-Legger Spouse Missing (Kitchen)</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:260px 1fr;gap:12px;margin-bottom:12px;">
+            <div>
+              <label style="font-size:0.74rem;color:var(--text-secondary);font-weight:700;display:block;margin-bottom:5px;">PROJECT TRADE</label>
+              <select id="coachLabTrade" class="input-ctrl"></select>
+            </div>
+            <div>
+              <label style="font-size:0.74rem;color:var(--text-secondary);font-weight:700;display:block;margin-bottom:5px;">DESCRIBE THE LIVE DEAL OR OBJECTION</label>
+              <textarea id="coachLabInput" class="input-ctrl" rows="3" placeholder="Tell Coach Megladon what the homeowner said, your price tiers, and where the sit stalled..."></textarea>
+            </div>
+          </div>
+
+          <div style="display:flex;justify-content:flex-end;">
+            <button class="btn btn-gold" id="askCoachSubmitBtn">🦈 Generate Battle Plan & Scripts</button>
+          </div>
+        </div>
+
+        <div class="card md-output" id="coachLabOutput" style="display:none;"></div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 4: MASTERS PLAYBOOK VAULT
+      ================================================================= -->
+      <section class="view-section" id="view-playbook">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">📚 Home Improvement Sales Masters Vault & Jeremy Miner NEPQ Dojo</h1>
+            <p class="page-subtitle">Distilled closing DNA from Jeremy Miner (7th Level NEPQ), Dave Yoho, Rodney Webb, Grosso University, Brian Gottlieb, Chris Voss, Rilla Telemetry, and Dinverno Remodeling and Construction.</p>
+          </div>
+        </div>
+
+        <h3 style="margin-bottom:12px;color:#34d399;font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em;">🎯 Jeremy Miner's 7th Level NEPQ — 5-Stage Question & Tonality Arsenal</h3>
+        <div class="grid-2" id="nepqArsenalGrid" style="margin-bottom:28px;"></div>
+
+        <h3 style="margin-bottom:12px;color:var(--gold);font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em;">The 8-Step DRC Megladon Consultation Roadmap</h3>
+        <div class="grid-3" id="stagesRoadmapGrid" style="margin-bottom:28px;"></div>
+
+        <h3 style="margin-bottom:12px;color:var(--cyan);font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em;">8 Elite Methodologies Baked Into Megladon</h3>
+        <div class="grid-2" id="mastersVaultGrid"></div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 5: ADRIANO'S EXECUTIVE COMMAND CENTER & LEADERBOARD
+      ================================================================= -->
+      <section class="view-section" id="view-command">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">🏆 Executive Command Center & Team Leaderboard</h1>
+            <p class="page-subtitle">Track DRC rep readiness, review Film-Room scorecards & transcripts, and assign targeted objection drills across the team.</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="refreshAnalyticsBtn">↻ Refresh Telemetry</button>
+        </div>
+
+        <div class="grid-2" style="margin-bottom:22px;">
+          <!-- Leaderboard -->
+          <div class="card">
+            <h3 style="margin-bottom:12px;font-size:1rem;">🦈 DRC Closer Standings</h3>
+            <div style="overflow-x:auto;">
+              <table class="leader-table" id="leaderboardTable">
+                <thead>
+                  <tr>
+                    <th>Closer</th>
+                    <th>Rank</th>
+                    <th>Sits</th>
+                    <th>Wins</th>
+                    <th>Avg Score</th>
+                    <th>XP</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Assign Drill Box -->
+          <div class="card">
+            <h3 style="margin-bottom:12px;font-size:1rem;">🎯 Dispatch Mandatory Rep Drill (Adriano Coach Control)</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="field-group">
+                <label>Assign To Rep</label>
+                <select id="assignRepSelect" class="input-ctrl"></select>
+              </div>
+              <div class="field-group">
+                <label>Drill Mode</label>
+                <select id="assignModeSelect" class="input-ctrl">
+                  <option value="objection_gauntlet">⚡ Rapid-Fire Objection Gauntlet</option>
+                  <option value="full_roleplay">🏡 Full Kitchen-Table Sit</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Homeowner Persona</label>
+                <select id="assignPersonaSelect" class="input-ctrl"></select>
+              </div>
+              <div class="field-group">
+                <label>Target Objection</label>
+                <select id="assignObjectionSelect" class="input-ctrl"></select>
+              </div>
+              <div class="field-group">
+                <label>Trade</label>
+                <select id="assignTradeSelect" class="input-ctrl"></select>
+              </div>
+              <div class="field-group">
+                <label>Intensity</label>
+                <select id="assignDiffSelect" class="input-ctrl">
+                  <option value="rookie">Rookie</option>
+                  <option value="pro" selected>Pro Closer</option>
+                  <option value="megladon_boss">🦈 Megladon Boss</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-group" style="margin-top:10px;">
+              <label>Coach Note / Focus Instruction</label>
+              <input id="assignNotesInput" type="text" class="input-ctrl" placeholder="e.g., Isolate price vs timing before mentioning monthly payment!" />
+            </div>
+            <button class="btn btn-gold" id="createAssignmentBtn" style="margin-top:12px;width:100%;">
+              🚀 Assign Drill to Rep Dashboard
+            </button>
+          </div>
+        </div>
+
+        <!-- Recent Film Room Sessions -->
+        <div class="card">
+          <h3 style="margin-bottom:12px;font-size:1rem;">🎬 Film-Room Session Archive (Click Any Sit to Inspect Scorecard & Transcript)</h3>
+          <div style="overflow-x:auto;">
+            <table class="leader-table" id="recentSessionsTable">
+              <thead>
+                <tr>
+                  <th>Closer</th>
+                  <th>Mode</th>
+                  <th>Homeowner & Trade</th>
+                  <th>Trust</th>
+                  <th>Score</th>
+                  <th>Outcome</th>
+                  <th>Inspect</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ==================================================================
+       100-POINT FILM-ROOM SCORECARD MODAL
+  =================================================================== -->
+  <div class="modal-backdrop" id="scorecardModal">
+    <div class="modal-panel" id="scorecardModalBody"></div>
+  </div>
+
+  <!-- ==================================================================
+       OBJECTION REBUTTAL STUDY MODAL
+  =================================================================== -->
+  <div class="modal-backdrop" id="objectionStudyModal">
+    <div class="modal-panel" id="objectionStudyBody"></div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
