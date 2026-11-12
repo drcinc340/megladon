@@ -815,41 +815,66 @@ async function submitRepTurn() {
   }
 }
 
-async function requestCoachRescue() {
+async function requestCoachRescue(customQuestion = "") {
   if (!state.activeSession) return;
   const drawer = document.getElementById("hintDrawer");
   const box = document.getElementById("hintContent");
   drawer.classList.add("open");
-  box.innerHTML = "🦈 Coach Megladon is reading the homeowner's move...";
+  box.innerHTML = "🦈 Coach Megladon is crafting your exact rebuttal & NEPQ move...";
 
   try {
-    const res = await apiFetch(`/api/sessions/${state.activeSession.id}/hint`, { method: "POST" });
+    const res = await apiFetch(`/api/sessions/${state.activeSession.id}/hint`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: customQuestion || "" }),
+    });
     const h = res.hint || {};
     const opt1 = h.option_nepq || {};
     const opt2 = h.option_closer || {};
 
+    if (h.coach_answer) {
+      document.getElementById("liveCoachWhisper").textContent = `🦈 ${h.coach_answer}`;
+    }
+
+    const renderOpt = (opt, idx, accentColor) => {
+      if (!opt.say_this) return "";
+      return `
+        <div style="background:rgba(5,8,17,0.78);border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">
+            <strong style="color:${accentColor};font-size:0.8rem;">${idx}. ${esc(opt.label || "Coach Script")}</strong>
+            ${opt.tonality ? `<span style="font-size:0.69rem;color:#94a3b8;">🎙️ ${esc(opt.tonality)}</span>` : ""}
+          </div>
+          <div style="color:#f8fafc;font-size:0.84rem;line-height:1.46;margin-bottom:8px;">"${esc(opt.say_this)}"</div>
+          <div style="display:flex;gap:7px;flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm send-hint-now-btn" data-line="${esc(opt.say_this)}" style="padding:5px 11px;font-size:0.74rem;">🚀 Say This Now</button>
+            <button class="btn btn-ghost btn-sm edit-hint-btn" data-line="${esc(opt.say_this)}" style="padding:5px 11px;font-size:0.74rem;">📝 Edit First</button>
+            <button class="btn btn-ghost btn-sm speak-hint-btn" data-line="${esc(opt.say_this)}" style="padding:5px 11px;font-size:0.74rem;">🔊 Hear Coach</button>
+          </div>
+        </div>
+      `;
+    };
+
     box.innerHTML = `
-      <div style="margin-bottom:6px;color:#cbd5e1;"><strong>Diagnosis:</strong> ${esc(h.diagnosis)}</div>
-      ${
-        opt1.say_this
-          ? `<button class="hint-option-btn" data-line="${esc(opt1.say_this)}">
-              <strong style="color:var(--cyan);">1. ${esc(opt1.label || "NEPQ Disarm & Isolate")}:</strong><br/>"${esc(opt1.say_this)}"
-            </button>`
-          : ""
-      }
-      ${
-        opt2.say_this
-          ? `<button class="hint-option-btn" data-line="${esc(opt2.say_this)}">
-              <strong style="color:var(--gold);">2. ${esc(opt2.label || "DRC Value & Monthly Close")}:</strong><br/>"${esc(opt2.say_this)}"
-            </button>`
-          : ""
-      }
+      <div style="margin-bottom:4px;color:#cbd5e1;"><strong>🧠 Diagnosis:</strong> ${esc(h.diagnosis)}</div>
+      ${h.coach_answer ? `<div style="margin-bottom:6px;color:#fde68a;"><strong>🎯 Coach Advice:</strong> ${esc(h.coach_answer)}</div>` : ""}
+      ${renderOpt(opt1, 1, "var(--cyan)")}
+      ${renderOpt(opt2, 2, "var(--gold)")}
     `;
-    box.querySelectorAll(".hint-option-btn").forEach((b) => {
+
+    box.querySelectorAll(".edit-hint-btn").forEach((b) => {
       b.onclick = () => {
         document.getElementById("repMessageInput").value = b.dataset.line;
         document.getElementById("repMessageInput").focus();
       };
+    });
+    box.querySelectorAll(".send-hint-now-btn").forEach((b) => {
+      b.onclick = () => {
+        document.getElementById("repMessageInput").value = b.dataset.line;
+        submitRepTurn();
+      };
+    });
+    box.querySelectorAll(".speak-hint-btn").forEach((b) => {
+      b.onclick = () => speakText(b.dataset.line, "coach_megladon");
     });
   } catch (err) {
     box.textContent = "Could not load rescue hint: " + err.message;
@@ -1175,7 +1200,23 @@ async function initApp() {
   });
 
   document.getElementById("micToggleBtn").onclick = toggleMicRecording;
-  document.getElementById("rescueHintBtn").onclick = requestCoachRescue;
+  document.getElementById("rescueHintBtn").onclick = () => requestCoachRescue("");
+  const inSitBtn = document.getElementById("inSitAskCoachBtn");
+  const inSitInp = document.getElementById("inSitCoachQuestion");
+  if (inSitBtn && inSitInp) {
+    const runInSitCoach = () => {
+      const q = inSitInp.value.trim();
+      inSitInp.value = "";
+      requestCoachRescue(q);
+    };
+    inSitBtn.onclick = runInSitCoach;
+    inSitInp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        runInSitCoach();
+      }
+    });
+  }
   const nepqBtn = document.getElementById("nepqBankBtn");
   if (nepqBtn) {
     nepqBtn.onclick = () => {
