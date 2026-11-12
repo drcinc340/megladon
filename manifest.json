@@ -1,0 +1,17 @@
+{
+  "name": "MEGLADON — DRC AI Sales Coach",
+  "short_name": "MEGLADON",
+  "description": "Apex Home Improvement AI Roleplay & Objection Coaching Dojo for Dinverno Remodeling and Construction.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#060A12",
+  "theme_color": "#060A12",
+  "icons": [
+    {
+      "src": "./assets/megladon-emblem.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}
