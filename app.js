@@ -1,11 +1,30 @@
-/* MEGLADON — Apex Home Improvement AI Sales Coach Frontend Engine
+/* MEGLADON — Multi-Tenant AI Home Improvement Sales Coach & Prospect Sandbox Engine
    Built for Adriano Vagnini & Dinverno Remodeling and Construction (+1 (248) 431-4609)
 */
 
+const urlParams = new URLSearchParams(window.location.search);
+
 const state = {
   apiBase: "",
+  inviteToken: (urlParams.get("invite") || "").trim(),
+  isInviteMode: Boolean((urlParams.get("invite") || "").trim()),
+  founderPin: localStorage.getItem("megladon_founder_pin") || "",
+  founderUnlocked: false,
+  previewOrgId: "",
+  previewInviteUrl: "",
+  orgId: "drc",
+  brand: {
+    id: "drc",
+    name: "Dinverno Remodeling and Construction",
+    short_name: "DRC",
+    phone: "+1 (248) 431-4609",
+    region: "Southeast Michigan",
+    tagline: "Dinverno Remodeling Sales Dojo",
+    accent_color: "#0ea5e9",
+  },
+  access: { allowed: true, sessions_used: 0, max_sessions: 0, plan_type: "flagship", status: "active" },
   reps: [],
-  activeRepId: localStorage.getItem("megladon_rep_id") || "rep_adriano",
+  activeRepId: "rep_adriano",
   personas: [],
   selectedPersonaId: "price_grinder_frank",
   trades: [],
@@ -14,6 +33,7 @@ const state = {
   stages: [],
   pillars: [],
   masters: [],
+  coachPresets: [],
   assignments: [],
   activeSession: null,
   currentAudio: null,
@@ -22,6 +42,18 @@ const state = {
   audioChunks: [],
   speechRec: null,
   sendingTurn: false,
+  // Studio state
+  tradesCatalog: [],
+  selectedStudioTrades: new Set([
+    "Impact Windows & Hurricane Doors",
+    "Energy-Efficient Replacement Windows",
+    "Architectural Roof Replacement",
+    "Luxury Kitchen Remodel",
+    "Primary Bath & Wet-Area Remodel",
+    "Seamless Gutters & Micro-Mesh Guards",
+  ]),
+  companiesList: [],
+  lastCreatedCompany: null,
 };
 
 function esc(str) {
@@ -70,12 +102,10 @@ function renderMarkdown(md) {
 }
 
 async function resolveApiBase() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get("api")) {
-    state.apiBase = params.get("api").replace(/\/+$/, "");
+  if (urlParams.get("api")) {
+    state.apiBase = urlParams.get("api").replace(/\/+$/, "");
     return;
   }
-  // If running directly on FastAPI/Starlette server
   try {
     const r = await fetch("/api/status", { signal: AbortSignal.timeout(2500) });
     if (r.ok) {
@@ -84,7 +114,6 @@ async function resolveApiBase() {
     }
   } catch (_) {}
 
-  // Otherwise check static tunnel_config.json (used when deployed on Surge / GitHub Pages)
   try {
     const cfgRes = await fetch(`./tunnel_config.json?t=${Date.now()}`, { cache: "no-store" });
     if (cfgRes.ok) {
@@ -96,9 +125,26 @@ async function resolveApiBase() {
   } catch (_) {}
 }
 
+function buildTenantHeaders(extraHeaders = {}) {
+  const h = { ...extraHeaders };
+  if (state.inviteToken) {
+    h["X-Invite-Token"] = state.inviteToken;
+  } else if (state.previewOrgId && state.founderPin) {
+    h["X-Founder-Pin"] = state.founderPin;
+    h["X-Org-Id"] = state.previewOrgId;
+  } else if (state.founderPin) {
+    h["X-Founder-Pin"] = state.founderPin;
+  }
+  return h;
+}
+
 async function apiFetch(path, options = {}) {
   const url = `${state.apiBase}${path}`;
-  const res = await fetch(url, options);
+  const opts = {
+    ...options,
+    headers: buildTenantHeaders(options.headers || {}),
+  };
+  const res = await fetch(url, opts);
   const data = await res.json();
   if (!res.ok || data.ok === false) {
     throw new Error(data.error || `HTTP ${res.status}`);
@@ -107,7 +153,7 @@ async function apiFetch(path, options = {}) {
 }
 
 /* ============================================================================
-   NEURAL VOICE PLAYBACK (ELEVENLABS + BROWSER FALLBACK)
+   NEURAL VOICE PLAYBACK & PUSH-TO-TALK RECORDING
 ============================================================================ */
 
 function stopActiveAudio() {
@@ -119,7 +165,9 @@ function stopActiveAudio() {
     state.currentAudio = null;
   }
   if (window.speechSynthesis) {
-    try { window.speechSynthesis.cancel(); } catch (_) {}
+    try {
+      window.speechSynthesis.cancel();
+    } catch (_) {}
   }
   const orb = document.getElementById("liveVoiceOrb");
   if (orb) orb.classList.remove("speaking");
@@ -134,7 +182,7 @@ async function speakText(text, personaId = "coach_megladon") {
   try {
     const res = await fetch(`${state.apiBase}/api/tts`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: buildTenantHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ text, persona_id: personaId }),
     });
     const ct = res.headers.get("content-type") || "";
@@ -155,7 +203,6 @@ async function speakText(text, personaId = "coach_megladon") {
     }
   } catch (_) {}
 
-  // Browser neural speech fallback
   if ("speechSynthesis" in window) {
     const utter = new SpeechSynthesisUtterance(text);
     utter.rate = 1.02;
@@ -168,17 +215,12 @@ async function speakText(text, personaId = "coach_megladon") {
   }
 }
 
-/* ============================================================================
-   PUSH-TO-TALK VOICE RECORDING (MEDIARECORDER -> GEMINI STT + LIVE CAPTIONS)
-============================================================================ */
-
 async function toggleMicRecording() {
   const micBtn = document.getElementById("micToggleBtn");
   const banner = document.getElementById("recordingStatusBanner");
   const orb = document.getElementById("liveVoiceOrb");
   const input = document.getElementById("repMessageInput");
 
-  // Barge-in: silence homeowner immediately when rep starts talking
   stopActiveAudio();
 
   if (state.isRecording) {
@@ -188,7 +230,9 @@ async function toggleMicRecording() {
     banner.style.display = "none";
 
     if (state.speechRec) {
-      try { state.speechRec.stop(); } catch (_) {}
+      try {
+        state.speechRec.stop();
+      } catch (_) {}
       state.speechRec = null;
     }
     if (state.mediaRecorder && state.mediaRecorder.state !== "inactive") {
@@ -215,7 +259,6 @@ async function toggleMicRecording() {
     banner.textContent = "🎙️ Listening... Speak naturally like you're at the kitchen table, then tap the red mic again to send!";
     banner.style.display = "block";
 
-    // Optional live interim preview on desktop Chrome/Edge
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     let interimText = "";
     if (SR) {
@@ -252,7 +295,7 @@ async function toggleMicRecording() {
       try {
         const fd = new FormData();
         fd.append("audio", blob, "rep_pitch.webm");
-        const r = await fetch(`${state.apiBase}/api/stt`, { method: "POST", body: fd });
+        const r = await fetch(`${state.apiBase}/api/stt`, { method: "POST", headers: buildTenantHeaders(), body: fd });
         const d = await r.json();
         if (d.ok && d.transcript && d.transcript.trim()) {
           input.value = d.transcript.trim();
@@ -272,17 +315,181 @@ async function toggleMicRecording() {
 }
 
 /* ============================================================================
-   UI RENDERING & BOOTSTRAP
+   WHITE-LABEL BRANDING & UI RENDERING
 ============================================================================ */
+
+function applyCompanyBranding() {
+  const b = state.brand || {};
+  const name = b.name || "Dinverno Remodeling and Construction";
+  const shortName = b.short_name || "DRC";
+  const phone = b.phone || "+1 (248) 431-4609";
+  const region = b.region || "Southeast Michigan";
+  const accent = b.accent_color || "#0ea5e9";
+
+  document.title = `MEGLADON — AI Sales Coach | ${name}`;
+  document.documentElement.style.setProperty("--cyan", accent);
+
+  const mobileSub = document.getElementById("mobileBrandSub");
+  if (mobileSub) mobileSub.textContent = `${name} Sales Dojo`;
+
+  const sideSub = document.getElementById("sidebarBrandSub");
+  if (sideSub) sideSub.textContent = state.orgId === "drc" ? "Apex AI Sales Coach" : `${shortName} Sales Dojo`;
+
+  const sideName = document.getElementById("sidebarCompanyName");
+  if (sideName) sideName.textContent = name;
+
+  const sidePhone = document.getElementById("sidebarCompanyPhone");
+  if (sidePhone) sidePhone.textContent = phone;
+
+  const arenaSub = document.getElementById("arenaPageSubtitle");
+  if (arenaSub) {
+    arenaSub.textContent = `Train live by voice or text against hyper-realistic ${region} homeowners. Unlock hidden emotional drivers, hold ${name}'s margin, and earn the close.`;
+  }
+
+  const tradeLbl = document.getElementById("setupTradeLabel");
+  if (tradeLbl) tradeLbl.textContent = `2. ${shortName} Project Trade & Scope`;
+
+  const hudTitle = document.getElementById("hudTradeTitle");
+  if (hudTitle) hudTitle.textContent = `📋 ${shortName} Tiers & Local Code`;
+
+  const pbSub = document.getElementById("playbookPageSubtitle");
+  if (pbSub) {
+    pbSub.textContent = `Distilled closing DNA from Jeremy Miner (7th Level NEPQ), Dave Yoho, Rodney Webb, Grosso University, Brian Gottlieb, Chris Voss, Rilla Telemetry, and ${name}.`;
+  }
+
+  const stgTitle = document.getElementById("stagesRoadmapTitle");
+  if (stgTitle) stgTitle.textContent = `The 8-Step ${shortName} Megladon Consultation Roadmap`;
+
+  const lbHead = document.getElementById("leaderboardHeading");
+  if (lbHead) lbHead.textContent = `🦈 ${shortName} Closer Standings`;
+
+  // Hide Prospect Studio tab from external invite links
+  const studioNav = document.getElementById("navProspectStudioBtn");
+  if (studioNav) {
+    studioNav.style.display = state.isInviteMode ? "none" : "flex";
+  }
+
+  // Founder Preview Top Bar
+  const prevBar = document.getElementById("founderPreviewBar");
+  if (prevBar) {
+    if (!state.isInviteMode && state.previewOrgId && state.previewOrgId !== "drc") {
+      prevBar.style.display = "flex";
+      document.getElementById("previewCompanyLabel").textContent = `${name} (${region})`;
+    } else {
+      prevBar.style.display = "none";
+    }
+  }
+
+  // Prospect Sandbox Trial Meter (for invited prospects)
+  const trialBox = document.getElementById("prospectTrialBox");
+  if (trialBox) {
+    if (state.isInviteMode && state.access) {
+      const used = state.access.sessions_used || 0;
+      const maxS = state.access.max_sessions || 0;
+      trialBox.style.display = "block";
+      trialBox.innerHTML = `
+        <div style="font-weight:800;color:var(--gold);margin-bottom:3px;">
+          ${maxS > 0 ? `🎁 Custom Demo Sandbox` : `🏆 Dedicated Team Portal`}
+        </div>
+        <div style="color:#e2e8f0;margin-bottom:7px;">
+          ${maxS > 0 ? `<strong>${used} / ${maxS}</strong> complimentary sits used` : `Unlimited active seats for <strong>${esc(name)}</strong>`}
+        </div>
+        <button class="btn btn-gold btn-sm" id="openUpgradeInfoBtn" style="width:100%;font-size:0.73rem;padding:6px 8px;">
+          🚀 Activate Full Team License
+        </button>
+      `;
+      document.getElementById("openUpgradeInfoBtn").onclick = openProspectUpgradeModal;
+    } else {
+      trialBox.style.display = "none";
+    }
+  }
+
+  // Access Blocked Banner (Paused or Expired)
+  const blockedBanner = document.getElementById("accessBlockedBanner");
+  if (blockedBanner) {
+    if (state.access && state.access.allowed === false) {
+      blockedBanner.style.display = "block";
+      blockedBanner.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <strong style="color:var(--gold);font-size:0.95rem;">🔒 Sandbox Trial Notice</strong>
+            <div style="color:#f8fafc;font-size:0.86rem;margin-top:3px;">${esc(state.access.message)}</div>
+          </div>
+          <a href="mailto:drcinc340@gmail.com?subject=${encodeURIComponent("Activate Full MEGLADON License for " + name)}" class="btn btn-gold btn-sm" style="text-decoration:none;">
+            ✉️ Contact Adriano Vagnini
+          </a>
+        </div>
+      `;
+    } else {
+      blockedBanner.style.display = "none";
+    }
+  }
+}
+
+function openProspectUpgradeModal() {
+  const modal = document.getElementById("shareCompanyModal");
+  const body = document.getElementById("shareCompanyModalBody");
+  const name = state.brand?.name || "Your Company";
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="font-size:1.25rem;">🦈 Launch Your Dedicated <span style="color:var(--gold);">MEGLADON</span> Dojo</h2>
+      <button class="btn btn-ghost btn-sm" id="closeUpgradeModalBtn">✕ Close</button>
+    </div>
+    <p style="font-size:0.9rem;color:#cbd5e1;line-height:1.6;margin-bottom:14px;">
+      This custom sandbox was built by <strong>Adriano Vagnini</strong> specifically for <strong>${esc(name)}</strong>.
+      A full dedicated deployment unlocks:
+    </p>
+    <ul style="padding-left:20px;font-size:0.86rem;color:#e2e8f0;line-height:1.65;margin-bottom:18px;">
+      <li><strong>Unlimited Voice &amp; Text Roleplay Sits</strong> across your entire sales force</li>
+      <li><strong>Custom Pricing Tiers, Financing Plans &amp; Exact Product Specs</strong> baked into every persona</li>
+      <li><strong>Sales Manager Command Center</strong> to assign mandatory drills &amp; audit 100-point Film-Room Scorecards</li>
+      <li><strong>Dedicated Custom URL &amp; Mobile Home-Screen PWA</strong> for every rep</li>
+    </ul>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+      <a href="mailto:drcinc340@gmail.com?subject=${encodeURIComponent("Dedicated MEGLADON Deployment — " + name)}" class="btn btn-gold" style="text-decoration:none;">
+        ✉️ Email Adriano Vagnini (drcinc340@gmail.com)
+      </a>
+    </div>
+  `;
+  modal.classList.add("open");
+  document.getElementById("closeUpgradeModalBtn").onclick = () => modal.classList.remove("open");
+}
+
+function renderCoachPresets() {
+  const wrap = document.getElementById("quickCoachPrompts");
+  if (!wrap) return;
+  wrap.innerHTML = (state.coachPresets || [])
+    .map(
+      (p) =>
+        `<button class="btn btn-ghost btn-sm coach-preset" data-trade="${esc(p.trade || "")}" data-q="${esc(p.q)}">${esc(p.label)}</button>`
+    )
+    .join("");
+  wrap.querySelectorAll(".coach-preset").forEach((b) => {
+    b.onclick = () => {
+      document.getElementById("coachLabInput").value = b.dataset.q;
+      if (b.dataset.trade) {
+        const tSel = document.getElementById("coachLabTrade");
+        if (tSel) tSel.value = b.dataset.trade;
+      }
+    };
+  });
+}
 
 function renderRepSelector() {
   const sel = document.getElementById("repSelect");
   const assignSel = document.getElementById("assignRepSelect");
-  if (!state.reps.find((r) => r.id === state.activeRepId) && state.reps.length) {
+  const savedRep = localStorage.getItem(`megladon_rep_${state.orgId}`);
+  if (savedRep && state.reps.find((r) => r.id === savedRep)) {
+    state.activeRepId = savedRep;
+  } else if (!state.reps.find((r) => r.id === state.activeRepId) && state.reps.length) {
     state.activeRepId = state.reps[0].id;
   }
+
   sel.innerHTML = state.reps
-    .map((r) => `<option value="${esc(r.id)}" ${r.id === state.activeRepId ? "selected" : ""}>${esc(r.name)} (${esc(r.role.split("/")[0].trim())})</option>`)
+    .map(
+      (r) =>
+        `<option value="${esc(r.id)}" ${r.id === state.activeRepId ? "selected" : ""}>${esc(r.name)} (${esc((r.role || "").split("/")[0].trim())})</option>`
+    )
     .join("");
 
   if (assignSel) {
@@ -342,9 +549,10 @@ function renderPersonaSetup() {
   grid.innerHTML = state.personas
     .map((p) => {
       const isSel = p.id === state.selectedPersonaId;
-      const bossTag = p.difficulty_default === "megladon_boss"
-        ? `<span style="background:rgba(245,158,11,0.2);color:var(--gold);border:1px solid var(--border-gold);padding:2px 7px;border-radius:999px;font-size:0.66rem;font-weight:800;">BOSS</span>`
-        : "";
+      const bossTag =
+        p.difficulty_default === "megladon_boss"
+          ? `<span style="background:rgba(245,158,11,0.2);color:var(--gold);border:1px solid var(--border-gold);padding:2px 7px;border-radius:999px;font-size:0.66rem;font-weight:800;">BOSS</span>`
+          : "";
       return `
         <div class="card persona-card ${isSel ? "selected" : ""}" data-pid="${esc(p.id)}">
           <div class="persona-top">
@@ -360,7 +568,7 @@ function renderPersonaSetup() {
           </div>
           <p class="persona-desc">${esc(p.summary)}</p>
           <div style="display:flex;justify-content:space-between;align-items:center;font-size:0.74rem;color:var(--text-muted);margin-top:auto;padding-top:6px;border-top:1px solid rgba(148,163,184,0.1);">
-            <span>Default: <strong style="color:#e2e8f0;">${esc(p.default_trade.split("&")[0])}</strong></span>
+            <span>Default: <strong style="color:#e2e8f0;">${esc((p.default_trade || "").split("&")[0])}</strong></span>
             <span>🔐 3 Secret Clues</span>
           </div>
         </div>
@@ -391,15 +599,17 @@ function populateTradesAndDropdowns() {
 
   const pSel = document.getElementById("assignPersonaSelect");
   if (pSel) {
-    pSel.innerHTML = state.personas.map((p) => `<option value="${esc(p.id)}">${esc(p.avatar_emoji)} ${esc(p.name)} (${esc(p.archetype)})</option>`).join("");
+    pSel.innerHTML = state.personas
+      .map((p) => `<option value="${esc(p.id)}">${esc(p.avatar_emoji)} ${esc(p.name)} (${esc(p.archetype)})</option>`)
+      .join("");
   }
   const oSel = document.getElementById("assignObjectionSelect");
   if (oSel) {
     oSel.innerHTML = state.objections.map((o) => `<option value="${esc(o.key)}">${esc(o.title)}</option>`).join("");
   }
 
-  const selP = state.personas.find((x) => x.id === state.selectedPersonaId);
-  if (selP) {
+  const selP = state.personas.find((x) => x.id === state.selectedPersonaId) || state.personas[0];
+  if (selP && state.trades.some((t) => t.name === selP.default_trade)) {
     document.getElementById("setupTrade").value = selP.default_trade;
   }
   updateTradePreview();
@@ -409,15 +619,16 @@ function updateTradePreview() {
   const tName = document.getElementById("setupTrade").value;
   const t = state.trades.find((x) => x.name === tName) || state.trades[0];
   if (!t) return;
+  const shortBrand = state.brand?.short_name || "DRC";
   document.getElementById("tradePreviewStrip").innerHTML = `
     <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between;">
       <div>
-        <strong style="color:var(--cyan);">DRC ${esc(t.name)} Tiers:</strong>
+        <strong style="color:var(--cyan);">${esc(shortBrand)} ${esc(t.name)} Tiers:</strong>
         <span style="margin-left:8px;">Good: <strong>${esc(t.typical_tiers.good)}</strong> • Better: <strong style="color:var(--gold);">${esc(t.typical_tiers.better)}</strong> • Best: <strong>${esc(t.typical_tiers.best)}</strong></span>
         <span style="margin-left:10px;background:rgba(16,185,129,0.16);color:#34d399;padding:2px 8px;border-radius:999px;font-weight:700;font-size:0.76rem;">Promo Financing from ${esc(t.monthly_from)}</span>
       </div>
       <div style="color:var(--text-secondary);font-size:0.8rem;max-width:680px;">
-        <strong>Code & Build Spec:</strong> ${esc(t.code_and_specs)}
+        <strong>Code &amp; Build Spec:</strong> ${esc(t.code_and_specs)}
       </div>
     </div>
   `;
@@ -426,7 +637,8 @@ function updateTradePreview() {
 function renderObjectionGauntlet() {
   const grid = document.getElementById("objectionGauntletGrid");
   grid.innerHTML = state.objections
-    .map((o) => `
+    .map(
+      (o) => `
       <div class="card objection-card">
         <div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -442,18 +654,18 @@ function renderObjectionGauntlet() {
             ⚡ Spar Live Against This Now
           </button>
           <button class="btn btn-ghost btn-sm study-obj-btn" data-okey="${esc(o.key)}">
-            📖 3 Master Scripts
+            📖 Master Scripts
           </button>
         </div>
       </div>
-    `)
+    `
+    )
     .join("");
 
   grid.querySelectorAll(".spar-obj-btn").forEach((btn) => {
     btn.onclick = () => {
       const okey = btn.dataset.okey;
       const trade = document.getElementById("gauntletTradeSelect").value;
-      // Pick matching persona or default tough persona
       const matchingPersona =
         state.personas.find((p) => (p.primary_objections || []).includes(okey)) || state.personas[0];
       switchView("view-arena");
@@ -621,6 +833,11 @@ async function startSession(opts = {}) {
       body: JSON.stringify(payload),
     });
     state.activeSession = data.session;
+    if (data.usage) {
+      state.access.sessions_used = data.usage.sessions_used;
+      state.access.max_sessions = data.usage.max_sessions;
+      applyCompanyBranding();
+    }
     document.getElementById("arenaSetup").style.display = "none";
     document.getElementById("arenaCockpit").style.display = "block";
     document.getElementById("hintDrawer").classList.remove("open");
@@ -632,7 +849,12 @@ async function startSession(opts = {}) {
       speakText(firstTurn.content, state.activeSession.persona_id);
     }
   } catch (err) {
-    alert("Could not start roleplay: " + err.message);
+    if (state.isInviteMode && /complimentary|paused|expired/i.test(err.message)) {
+      alert(err.message);
+      openProspectUpgradeModal();
+    } else {
+      alert("Could not start roleplay: " + err.message);
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = prevTxt;
@@ -644,12 +866,12 @@ function renderActiveCockpit() {
   if (!sess) return;
   const persona = state.personas.find((p) => p.id === sess.persona_id) || state.personas[0];
   const tradeInfo = state.trades.find((t) => t.name === sess.trade) || state.trades[0];
+  const shortBrand = state.brand?.short_name || "DRC";
 
   document.getElementById("liveVoiceOrb").textContent = persona ? persona.avatar_emoji : "🦈";
   document.getElementById("activePersonaTitle").textContent = `${persona.name} (${sess.mode === "objection_gauntlet" ? "⚡ Gauntlet" : "🏡 Full Sit"})`;
   document.getElementById("activePersonaSub").textContent = `${persona.location} • ${sess.trade} • ${sess.difficulty.toUpperCase()}`;
 
-  // Gauges
   const trust = sess.trust_score ?? 38;
   const val = sess.value_score ?? 25;
   const urg = sess.urgency_score ?? 20;
@@ -672,7 +894,6 @@ function renderActiveCockpit() {
     gateBadge.textContent = "Gate Locked 🔒";
   }
 
-  // Last homeowner turn whisper & mood
   const hoTurns = (sess.turns || []).filter((t) => t.speaker === "homeowner");
   const lastHo = hoTurns[hoTurns.length - 1];
   if (lastHo && lastHo.coach_whisper) {
@@ -682,7 +903,6 @@ function renderActiveCockpit() {
     document.getElementById("statEmotion").textContent = lastHo.emotion.replace(/_/g, " ");
   }
 
-  // Clues Vault
   const unlocked = sess.unlocked_clues || [];
   document.getElementById("cluesCounter").textContent = `${Math.min(3, unlocked.length)} / 3 Unlocked`;
   const clueSlots = [0, 1, 2].map((idx) => {
@@ -698,7 +918,6 @@ function renderActiveCockpit() {
   });
   document.getElementById("cluesVaultList").innerHTML = clueSlots.join("");
 
-  // Rilla Telemetry
   const tr = sess.talk_ratio_pct ?? 50;
   const trEl = document.getElementById("statTalkRatio");
   trEl.textContent = `${tr}%`;
@@ -709,7 +928,6 @@ function renderActiveCockpit() {
   const stg = state.stages.find((s) => s.key === sess.current_stage);
   document.getElementById("stagePill").textContent = stg ? `Step ${stg.step}: ${stg.label}` : sess.current_stage;
 
-  // DRC Cheat Sheet
   if (tradeInfo) {
     document.getElementById("hudTradeCheatSheet").innerHTML = `
       <div style="margin-bottom:6px;">
@@ -718,11 +936,10 @@ function renderActiveCockpit() {
         <strong style="color:var(--cyan);">Best:</strong> ${esc(tradeInfo.typical_tiers.best)}
       </div>
       <div style="margin-bottom:6px;color:#34d399;font-weight:700;">💳 Promo Monthly: from ${esc(tradeInfo.monthly_from)}</div>
-      <div><strong>Specs & Code:</strong> ${esc(tradeInfo.code_and_specs)}</div>
+      <div><strong>Specs &amp; Code:</strong> ${esc(tradeInfo.code_and_specs)}</div>
     `;
   }
 
-  // Transcript Bubbles
   const stream = document.getElementById("transcriptStream");
   stream.innerHTML = (sess.turns || [])
     .map((t) => {
@@ -740,7 +957,7 @@ function renderActiveCockpit() {
       return `
         <div class="turn-bubble ${isRep ? "turn-rep" : "turn-homeowner"}">
           <div class="turn-meta">
-            <span>${isRep ? "🎙️ YOU (DRC Closer)" : `${esc(persona.avatar_emoji)} ${esc(persona.name)}`}</span>
+            <span>${isRep ? `🎙️ YOU (${esc(shortBrand)} Closer)` : `${esc(persona.avatar_emoji)} ${esc(persona.name)}`}</span>
             <div style="display:flex;align-items:center;gap:6px;">
               ${deltaHtml}
               ${
@@ -778,7 +995,6 @@ async function submitRepTurn() {
   sendBtn.disabled = true;
   sendBtn.textContent = "Thinking...";
 
-  // Optimistic append
   state.activeSession.turns.push({
     speaker: "rep",
     content: msg,
@@ -801,7 +1017,11 @@ async function submitRepTurn() {
 
     if (res.deal_closed) {
       setTimeout(() => {
-        if (confirm("🏆 BOOM! The homeowner agreed to move forward with Dinverno Remodeling and Construction! Ready to open your 100-Point Film-Room Scorecard?")) {
+        if (
+          confirm(
+            `🏆 BOOM! The homeowner agreed to move forward with ${state.brand.name}! Ready to open your 100-Point Film-Room Scorecard?`
+          )
+        ) {
           finishAndGradeSession();
         }
       }, 900);
@@ -961,7 +1181,7 @@ function openScorecardModal(sess) {
           </ul>
         </div>
         <div class="card" style="padding:14px;border-color:rgba(245,158,11,0.35);">
-          <h4 style="font-size:0.8rem;text-transform:uppercase;color:var(--gold);margin-bottom:6px;">🔧 Margin & Closing Leaks To Tighten</h4>
+          <h4 style="font-size:0.8rem;text-transform:uppercase;color:var(--gold);margin-bottom:6px;">🔧 Margin &amp; Closing Leaks To Tighten</h4>
           <ul style="padding-left:18px;font-size:0.83rem;line-height:1.52;color:#e2e8f0;">
             ${(sc.leaks || []).map((l) => `<li>${esc(l)}</li>`).join("")}
           </ul>
@@ -1025,7 +1245,7 @@ function openScorecardModal(sess) {
 }
 
 /* ============================================================================
-   COACH MEGLADON LIVE DEAL REHASH LAB & EXECUTIVE COMMAND CENTER
+   COACH LAB & EXECUTIVE COMMAND CENTER
 ============================================================================ */
 
 async function submitCoachLabQuestion() {
@@ -1046,7 +1266,7 @@ async function submitCoachLabQuestion() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        rep_name: rep ? rep.name : "DRC Closer",
+        rep_name: rep ? rep.name : `${state.brand.short_name} Closer`,
         question: q,
         trade,
       }),
@@ -1116,7 +1336,465 @@ async function loadCommandAnalytics() {
   } catch (_) {}
 }
 
+/* ============================================================================
+   ADRIANO'S PROSPECT & WHITE-LABEL CLIENT STUDIO
+============================================================================ */
+
+async function verifyAndLoadStudio(pinCandidate = "") {
+  const pin = (pinCandidate || state.founderPin || "").trim();
+  if (!pin) {
+    document.getElementById("studioLockGate").style.display = "block";
+    document.getElementById("studioWorkspace").style.display = "none";
+    return false;
+  }
+  try {
+    const res = await fetch(`${state.apiBase}/api/admin/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Founder-Pin": pin },
+      body: JSON.stringify({ pin }),
+    });
+    const d = await res.json();
+    if (!res.ok || !d.ok) throw new Error(d.error || "Invalid PIN");
+
+    state.founderPin = pin;
+    state.founderUnlocked = true;
+    localStorage.setItem("megladon_founder_pin", pin);
+    document.getElementById("studioLockGate").style.display = "none";
+    document.getElementById("studioWorkspace").style.display = "block";
+
+    await Promise.all([loadStudioCatalog(), loadStudioCompanies()]);
+    return true;
+  } catch (err) {
+    if (pinCandidate) alert("Invalid Founder PIN: " + err.message);
+    state.founderUnlocked = false;
+    document.getElementById("studioLockGate").style.display = "block";
+    document.getElementById("studioWorkspace").style.display = "none";
+    return false;
+  }
+}
+
+async function loadStudioCatalog() {
+  if (state.tradesCatalog.length) {
+    renderStudioTradeChips();
+    return;
+  }
+  const data = await apiFetch("/api/admin/catalog");
+  state.tradesCatalog = data.trades_catalog || [];
+  renderStudioTradeChips();
+}
+
+function renderStudioTradeChips() {
+  const grid = document.getElementById("studioTradeChips");
+  if (!grid) return;
+  grid.innerHTML = state.tradesCatalog
+    .map((t) => {
+      const checked = state.selectedStudioTrades.has(t.name);
+      return `
+        <label class="trade-chip ${checked ? "checked" : ""}" data-tname="${esc(t.name)}">
+          <input type="checkbox" ${checked ? "checked" : ""} />
+          <span>${esc(t.name)}</span>
+        </label>
+      `;
+    })
+    .join("");
+
+  grid.querySelectorAll(".trade-chip").forEach((lbl) => {
+    const inp = lbl.querySelector("input");
+    inp.onchange = () => {
+      const tname = lbl.dataset.tname;
+      if (inp.checked) {
+        state.selectedStudioTrades.add(tname);
+        lbl.classList.add("checked");
+      } else {
+        state.selectedStudioTrades.delete(tname);
+        lbl.classList.remove("checked");
+      }
+    };
+  });
+}
+
+async function loadStudioCompanies() {
+  const data = await apiFetch("/api/admin/companies");
+  state.companiesList = data.companies || [];
+  renderCompaniesPipeline();
+}
+
+function formatTimeAgo(epochSec) {
+  if (!epochSec) return "Never";
+  const diff = Math.max(0, Math.floor(Date.now() / 1000 - epochSec));
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function renderStudioInviteBanner(comp) {
+  const banner = document.getElementById("studioInviteResult");
+  if (!comp || comp.id === "drc") {
+    banner.style.display = "none";
+    return;
+  }
+  state.lastCreatedCompany = comp;
+  banner.style.display = "block";
+  banner.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:260px;">
+        <div style="font-size:0.74rem;font-weight:800;color:#34d399;text-transform:uppercase;letter-spacing:0.06em;">
+          ✅ CUSTOM PORTAL LIVE FOR ${esc(comp.name.toUpperCase())} (${esc(comp.region)})
+        </div>
+        <div style="margin-top:6px;font-size:0.86rem;color:#f8fafc;word-break:break-all;">
+          <strong>Private Prospect Link:</strong>
+          <a href="${esc(comp.invite_url)}" target="_blank" style="color:var(--cyan);margin-left:6px;">${esc(comp.invite_url)}</a>
+        </div>
+        <div style="margin-top:4px;font-size:0.77rem;color:var(--text-secondary);">
+          Trades (${Object.keys(comp.trades || {}).length}): ${esc(Object.keys(comp.trades || {}).join(" • "))}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-primary btn-sm" id="bannerCopyInviteBtn">📋 Copy Link</button>
+        <button class="btn btn-gold btn-sm" id="bannerPreviewBtn">👁️ Preview As ${esc(comp.name.split(" ")[0])}</button>
+        <button class="btn btn-ghost btn-sm" id="bannerSendInviteBtn">📨 Email / SMS Invite</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("bannerCopyInviteBtn").onclick = (e) => {
+    navigator.clipboard.writeText(comp.invite_url);
+    e.target.textContent = "✅ Link Copied!";
+    setTimeout(() => (e.target.textContent = "📋 Copy Link"), 1600);
+  };
+  document.getElementById("bannerPreviewBtn").onclick = () => enterFounderPreview(comp);
+  document.getElementById("bannerSendInviteBtn").onclick = () => openShareCompanyModal(comp);
+}
+
+function renderCompaniesPipeline() {
+  const tbody = document.querySelector("#companiesPipelineTable tbody");
+  if (!tbody) return;
+
+  tbody.innerHTML = state.companiesList
+    .map((c) => {
+      const isFlagship = c.id === "drc";
+      const tradeKeys = Object.keys(c.trades || {});
+      const tradesBadge = tradeKeys.slice(0, 3).map((t) => esc(c.trades[t]?.short || t)).join(", ") +
+        (tradeKeys.length > 3 ? ` +${tradeKeys.length - 3}` : "");
+
+      let pillClass = "status-trial";
+      let pillLabel = "Active Trial";
+      if (isFlagship) {
+        pillClass = "status-flagship";
+        pillLabel = "Flagship HQ";
+      } else if (c.status === "paused") {
+        pillClass = "status-paused";
+        pillLabel = "Paused";
+      } else if (c.plan_type === "client" || Number(c.max_sessions) === 0) {
+        pillClass = "status-client";
+        pillLabel = "Full Client";
+      }
+
+      const sitsText = isFlagship || Number(c.max_sessions) === 0
+        ? `${c.sessions_used || 0} / ∞`
+        : `${c.sessions_used || 0} / ${c.max_sessions}`;
+
+      const controlsHtml = isFlagship
+        ? `<span style="font-size:0.75rem;color:var(--text-muted);">Main DRC Portal</span>`
+        : `
+          <div style="display:flex;gap:5px;flex-wrap:wrap;">
+            <button class="btn btn-primary btn-sm tbl-copy-btn" data-cid="${esc(c.id)}" title="Copy Private Invite Link">🔗 Copy</button>
+            <button class="btn btn-gold btn-sm tbl-preview-btn" data-cid="${esc(c.id)}" title="Preview Live Sandbox">👁️ Preview</button>
+            <button class="btn btn-ghost btn-sm tbl-share-btn" data-cid="${esc(c.id)}" title="Email or Text Link">📨 Send</button>
+            <button class="btn btn-ghost btn-sm tbl-plus-btn" data-cid="${esc(c.id)}" title="Add +20 Demo Sits">+20 Sits</button>
+            <button class="btn btn-ghost btn-sm tbl-toggle-btn" data-cid="${esc(c.id)}" title="Pause or Resume Access">${c.status === "paused" ? "▶️ Resume" : "⏸️ Pause"}</button>
+            ${c.plan_type !== "client" ? `<button class="btn btn-ghost btn-sm tbl-upgrade-btn" data-cid="${esc(c.id)}" title="Convert to Unlimited Client">🏆 Unlimited</button>` : ""}
+            <button class="btn btn-danger btn-sm tbl-del-btn" data-cid="${esc(c.id)}" title="Delete Sandbox">🗑️</button>
+          </div>
+        `;
+
+      return `
+        <tr>
+          <td>
+            <div style="font-weight:800;color:#fff;">${esc(c.name)}</div>
+            <div style="font-size:0.74rem;color:var(--text-secondary);">📍 ${esc(c.region || "—")} ${c.contact_name ? `• ${esc(c.contact_name)}` : ""}</div>
+          </td>
+          <td style="font-size:0.78rem;color:#cbd5e1;max-width:230px;">${tradesBadge || "—"}</td>
+          <td><span class="status-pill ${pillClass}">${pillLabel}</span></td>
+          <td style="font-size:0.8rem;">
+            <strong>${c.views_count || 0}</strong> opens
+            <div style="font-size:0.7rem;color:var(--text-muted);">Active: ${formatTimeAgo(c.last_active_at)}</div>
+          </td>
+          <td style="font-weight:700;">${sitsText}</td>
+          <td style="font-weight:800;color:var(--gold);">${c.avg_score ? `${c.avg_score}/100` : "—"}</td>
+          <td>${controlsHtml}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  tbody.querySelectorAll(".tbl-copy-btn").forEach((b) => {
+    b.onclick = () => {
+      const c = state.companiesList.find((x) => x.id === b.dataset.cid);
+      if (!c) return;
+      navigator.clipboard.writeText(c.invite_url);
+      b.textContent = "✅ Copied";
+      setTimeout(() => (b.textContent = "🔗 Copy"), 1400);
+    };
+  });
+
+  tbody.querySelectorAll(".tbl-preview-btn").forEach((b) => {
+    b.onclick = () => {
+      const c = state.companiesList.find((x) => x.id === b.dataset.cid);
+      if (c) enterFounderPreview(c);
+    };
+  });
+
+  tbody.querySelectorAll(".tbl-share-btn").forEach((b) => {
+    b.onclick = () => {
+      const c = state.companiesList.find((x) => x.id === b.dataset.cid);
+      if (c) openShareCompanyModal(c);
+    };
+  });
+
+  tbody.querySelectorAll(".tbl-plus-btn").forEach((b) => {
+    b.onclick = async () => {
+      await apiFetch(`/api/admin/companies/${b.dataset.cid}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ add_sessions: 20 }),
+      });
+      await loadStudioCompanies();
+    };
+  });
+
+  tbody.querySelectorAll(".tbl-toggle-btn").forEach((b) => {
+    b.onclick = async () => {
+      const c = state.companiesList.find((x) => x.id === b.dataset.cid);
+      if (!c) return;
+      const nextStatus = c.status === "paused" ? "active" : "paused";
+      await apiFetch(`/api/admin/companies/${c.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      await loadStudioCompanies();
+    };
+  });
+
+  tbody.querySelectorAll(".tbl-upgrade-btn").forEach((b) => {
+    b.onclick = async () => {
+      await apiFetch(`/api/admin/companies/${b.dataset.cid}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_type: "client", max_sessions: 0, expires_at: null, status: "active" }),
+      });
+      await loadStudioCompanies();
+    };
+  });
+
+  tbody.querySelectorAll(".tbl-del-btn").forEach((b) => {
+    b.onclick = async () => {
+      const c = state.companiesList.find((x) => x.id === b.dataset.cid);
+      if (!c) return;
+      if (!confirm(`Permanently delete ${c.name}'s sandbox portal, reps, and demo sessions?`)) return;
+      await apiFetch(`/api/admin/companies/${c.id}`, { method: "DELETE" });
+      if (state.lastCreatedCompany?.id === c.id) {
+        document.getElementById("studioInviteResult").style.display = "none";
+      }
+      await loadStudioCompanies();
+    };
+  });
+}
+
+async function createProspectiveCompany() {
+  const name = document.getElementById("newCompName").value.trim();
+  const region = document.getElementById("newCompRegion").value.trim();
+  if (!name) {
+    alert("Enter the Prospective Company Name first.");
+    return;
+  }
+  if (!region) {
+    alert("Enter their Market / City & State (e.g., Tampa Bay, FL or Dallas, TX).");
+    return;
+  }
+
+  const trade_names = Array.from(state.selectedStudioTrades);
+  const custom_trades = document.getElementById("newCompCustomTrades").value.trim();
+  if (!trade_names.length && !custom_trades) {
+    alert("Select at least 1 trade this company sells.");
+    return;
+  }
+
+  const btn = document.getElementById("createCompanyBtn");
+  const prevTxt = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "🦈 Tailoring Custom Sandbox...";
+
+  try {
+    const payload = {
+      name,
+      region,
+      phone: document.getElementById("newCompPhone").value.trim(),
+      contact_name: document.getElementById("newCompContactName").value.trim(),
+      contact_email: document.getElementById("newCompContactEmail").value.trim(),
+      contact_phone: document.getElementById("newCompContactPhone").value.trim(),
+      plan_type: document.getElementById("newCompPlanType").value,
+      max_sessions: Number(document.getElementById("newCompMaxSessions").value),
+      trial_days: Number(document.getElementById("newCompTrialDays").value),
+      accent_color: document.getElementById("newCompColor").value,
+      starter_reps: document.getElementById("newCompStarterReps").value.trim(),
+      custom_trades,
+      trade_names,
+      use_ai_tailor: document.getElementById("newCompAiTailor").checked,
+    };
+
+    const res = await apiFetch("/api/admin/companies", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    document.getElementById("newCompName").value = "";
+    document.getElementById("newCompStarterReps").value = "";
+    document.getElementById("newCompCustomTrades").value = "";
+
+    renderStudioInviteBanner(res.company);
+    await loadStudioCompanies();
+  } catch (err) {
+    alert("Could not create company portal: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = prevTxt;
+  }
+}
+
+function openShareCompanyModal(comp) {
+  const modal = document.getElementById("shareCompanyModal");
+  const body = document.getElementById("shareCompanyModalBody");
+  body.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h2 style="font-size:1.2rem;">📨 Share <span style="color:var(--gold);">${esc(comp.name)}</span> Private Sandbox</h2>
+      <button class="btn btn-ghost btn-sm" id="closeShareModalBtn">✕ Close</button>
+    </div>
+
+    <div style="background:rgba(5,8,17,0.75);border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:0.82rem;word-break:break-all;">
+      <div style="color:var(--text-secondary);font-size:0.72rem;text-transform:uppercase;font-weight:700;margin-bottom:4px;">Private Invite URL</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <span style="color:var(--cyan);">${esc(comp.invite_url)}</span>
+        <button class="btn btn-ghost btn-sm" id="modalCopyUrlBtn">📋 Copy</button>
+      </div>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:12px;">
+      <div class="field-group">
+        <label>Recipient Email (Tracked Open Pixel)</label>
+        <input id="shareEmailInput" type="email" class="input-ctrl" value="${esc(comp.contact_email || "")}" placeholder="owner@company.com" />
+      </div>
+      <div class="field-group">
+        <label>Recipient Mobile (SMS Text)</label>
+        <input id="sharePhoneInput" type="text" class="input-ctrl" value="${esc(comp.contact_phone || "")}" placeholder="e.g. 813-555-0144" />
+      </div>
+    </div>
+
+    <div class="field-group" style="margin-bottom:14px;">
+      <label>Optional Personal Note From Adriano</label>
+      <textarea id="shareCustomNote" class="input-ctrl" rows="2" placeholder="e.g., Built this specifically around your Impact Windows & Bath teams—try 'Price-Grinder Frank' on voice mode!"></textarea>
+    </div>
+
+    <div style="display:flex;gap:14px;align-items:center;margin-bottom:16px;font-size:0.84rem;">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="shareSendEmailChk" ${comp.contact_email ? "checked" : ""} />
+        <span>📧 Send Tracked Email</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+        <input type="checkbox" id="shareSendSmsChk" ${comp.contact_phone ? "checked" : ""} />
+        <span>📱 Send SMS Invite</span>
+      </label>
+    </div>
+
+    <div id="shareDispatchStatus" style="font-size:0.83rem;margin-bottom:10px;"></div>
+
+    <div style="display:flex;justify-content:flex-end;gap:8px;">
+      <button class="btn btn-gold" id="confirmShareDispatchBtn">🚀 Dispatch Private Invite Now</button>
+    </div>
+  `;
+
+  modal.classList.add("open");
+  document.getElementById("closeShareModalBtn").onclick = () => modal.classList.remove("open");
+  document.getElementById("modalCopyUrlBtn").onclick = (e) => {
+    navigator.clipboard.writeText(comp.invite_url);
+    e.target.textContent = "✅ Copied!";
+  };
+  document.getElementById("confirmShareDispatchBtn").onclick = async (e) => {
+    const btn = e.target;
+    const statusEl = document.getElementById("shareDispatchStatus");
+    const email = document.getElementById("shareEmailInput").value.trim();
+    const phone = document.getElementById("sharePhoneInput").value.trim();
+    const send_email = document.getElementById("shareSendEmailChk").checked;
+    const send_sms = document.getElementById("shareSendSmsChk").checked;
+    const custom_note = document.getElementById("shareCustomNote").value.trim();
+
+    if (send_email && !email) {
+      alert("Enter an email address or uncheck Send Tracked Email.");
+      return;
+    }
+    if (send_sms && !phone) {
+      alert("Enter a mobile number or uncheck Send SMS Invite.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Sending...";
+    statusEl.innerHTML = `<span style="color:var(--cyan);">Dispatching invite...</span>`;
+
+    try {
+      const res = await apiFetch(`/api/admin/companies/${comp.id}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, phone, send_email, send_sms, custom_note }),
+      });
+      const d = res.dispatch || {};
+      const parts = [];
+      if (d.email_sent) parts.push("✅ Tracked Email Delivered");
+      if (d.email_error) parts.push(`⚠️ Email: ${d.email_error}`);
+      if (d.sms_sent) parts.push("✅ SMS Delivered");
+      if (d.sms_error) parts.push(`⚠️ SMS: ${d.sms_error}`);
+      statusEl.innerHTML = `<strong style="color:#34d399;">${esc(parts.join(" • ") || "Invite ready")}</strong>`;
+      await loadStudioCompanies();
+    } catch (err) {
+      statusEl.innerHTML = `<span style="color:var(--rose);">Error: ${esc(err.message)}</span>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "🚀 Dispatch Private Invite Now";
+    }
+  };
+}
+
+async function enterFounderPreview(comp) {
+  stopActiveAudio();
+  state.activeSession = null;
+  document.getElementById("arenaCockpit").style.display = "none";
+  document.getElementById("arenaSetup").style.display = "block";
+  state.previewOrgId = comp.id;
+  state.previewInviteUrl = comp.invite_url;
+  await loadTenantBootstrap(false);
+  switchView("view-arena");
+}
+
+async function exitFounderPreview() {
+  stopActiveAudio();
+  state.activeSession = null;
+  document.getElementById("arenaCockpit").style.display = "none";
+  document.getElementById("arenaSetup").style.display = "block";
+  state.previewOrgId = "";
+  state.previewInviteUrl = "";
+  await loadTenantBootstrap(false);
+  switchView("view-studio");
+}
+
+/* ============================================================================
+   NAVIGATION, BOOTSTRAP & EVENT WIRING
+============================================================================ */
+
 function switchView(viewId) {
+  if (viewId === "view-studio" && state.isInviteMode) return;
+
   document.querySelectorAll(".view-section").forEach((s) => s.classList.remove("active"));
   const target = document.getElementById(viewId);
   if (target) target.classList.add("active");
@@ -1128,16 +1806,17 @@ function switchView(viewId) {
 
   if (viewId === "view-command") {
     loadCommandAnalytics();
+  } else if (viewId === "view-studio") {
+    verifyAndLoadStudio();
   }
 }
 
-/* ============================================================================
-   INITIALIZATION & EVENT WIRING
-============================================================================ */
-
-async function initApp() {
-  await resolveApiBase();
-  const boot = await apiFetch("/api/bootstrap");
+async function loadTenantBootstrap(trackView = false) {
+  const qs = trackView && state.isInviteMode ? "?track_view=1" : "";
+  const boot = await apiFetch(`/api/bootstrap${qs}`);
+  state.orgId = boot.org_id || "drc";
+  state.brand = boot.brand || state.brand;
+  state.access = boot.access || state.access;
   state.reps = boot.reps || [];
   state.personas = boot.personas || [];
   state.trades = boot.trades || [];
@@ -1146,17 +1825,40 @@ async function initApp() {
   state.stages = boot.stages || [];
   state.pillars = boot.pillars || [];
   state.masters = boot.masters || [];
+  state.coachPresets = boot.coach_presets || [];
 
   document.getElementById("voiceEngineBadge").textContent = boot.voice_enabled
     ? "● ElevenLabs Neural Voice Live"
     : "● Browser Voice Mode";
 
+  applyCompanyBranding();
   renderRepSelector();
   populateTradesAndDropdowns();
   renderPersonaSetup();
   renderObjectionGauntlet();
+  renderCoachPresets();
   renderPlaybookVault();
   await loadCommandAnalytics();
+}
+
+async function initApp() {
+  await resolveApiBase();
+
+  try {
+    await loadTenantBootstrap(true);
+  } catch (err) {
+    document.body.innerHTML = `
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;">
+        <div class="card" style="max-width:480px;padding:30px;">
+          <div style="font-size:2.4rem;margin-bottom:10px;">🦈</div>
+          <h2 style="margin-bottom:8px;">MEGLADON Portal Notice</h2>
+          <p style="color:var(--text-secondary);font-size:0.9rem;line-height:1.6;margin-bottom:18px;">${esc(err.message)}</p>
+          <a href="mailto:drcinc340@gmail.com" class="btn btn-gold" style="text-decoration:none;">Contact Adriano Vagnini</a>
+        </div>
+      </div>
+    `;
+    return;
+  }
 
   // Wire Navigation
   document.querySelectorAll(".nav-btn").forEach((btn) => {
@@ -1169,13 +1871,13 @@ async function initApp() {
 
   document.getElementById("repSelect").onchange = (e) => {
     state.activeRepId = e.target.value;
-    localStorage.setItem("megladon_rep_id", state.activeRepId);
+    localStorage.setItem(`megladon_rep_${state.orgId}`, state.activeRepId);
     updateActiveRepBadge();
     renderPendingAssignments();
   };
 
   document.getElementById("addRepQuickBtn").onclick = async () => {
-    const name = prompt("Enter new DRC Sales Rep's Full Name:");
+    const name = prompt(`Enter new ${state.brand.name} Sales Rep's Full Name:`);
     if (!name || !name.trim()) return;
     const role = prompt("Role / Title:", "Sales Representative") || "Sales Representative";
     const res = await apiFetch("/api/reps", {
@@ -1217,6 +1919,7 @@ async function initApp() {
       }
     });
   }
+
   const nepqBtn = document.getElementById("nepqBankBtn");
   if (nepqBtn) {
     nepqBtn.onclick = () => {
@@ -1249,6 +1952,7 @@ async function initApp() {
       });
     };
   }
+
   document.getElementById("closeHintBtn").onclick = () => document.getElementById("hintDrawer").classList.remove("open");
   document.getElementById("finishSitBtn").onclick = finishAndGradeSession;
   document.getElementById("exitSitBtn").onclick = () => {
@@ -1263,12 +1967,6 @@ async function initApp() {
     speakText(txt, "coach_megladon");
   };
 
-  // Coach Lab
-  document.querySelectorAll(".coach-preset").forEach((b) => {
-    b.onclick = () => {
-      document.getElementById("coachLabInput").value = b.dataset.q;
-    };
-  });
   document.getElementById("askCoachSubmitBtn").onclick = submitCoachLabQuestion;
 
   // Executive Command Center
@@ -1293,6 +1991,59 @@ async function initApp() {
     await loadCommandAnalytics();
     alert("🦈 Drill dispatched! It will appear at the top of that rep's Arena immediately.");
   };
+
+  // Founder Preview Bar Buttons
+  document.getElementById("exitPreviewBtn").onclick = exitFounderPreview;
+  document.getElementById("previewCopyLinkBtn").onclick = (e) => {
+    if (!state.previewInviteUrl) return;
+    navigator.clipboard.writeText(state.previewInviteUrl);
+    e.target.textContent = "✅ Link Copied!";
+    setTimeout(() => (e.target.textContent = "📋 Copy Their Invite Link"), 1600);
+  };
+
+  // Founder Prospect Studio Wiring
+  document.getElementById("unlockStudioBtn").onclick = () => {
+    const pin = document.getElementById("founderPinInput").value.trim();
+    verifyAndLoadStudio(pin);
+  };
+  document.getElementById("founderPinInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      verifyAndLoadStudio(e.target.value.trim());
+    }
+  });
+  document.getElementById("refreshStudioBtn").onclick = () => {
+    if (state.founderUnlocked) loadStudioCompanies();
+  };
+  document.getElementById("createCompanyBtn").onclick = createProspectiveCompany;
+
+  document.getElementById("presetExteriorsBtn").onclick = () => {
+    state.selectedStudioTrades = new Set(
+      state.tradesCatalog.filter((t) => t.category === "Exteriors").map((t) => t.name)
+    );
+    renderStudioTradeChips();
+  };
+  document.getElementById("presetInteriorsBtn").onclick = () => {
+    state.selectedStudioTrades = new Set([
+      "Luxury Kitchen Remodel",
+      "Primary Bath & Wet-Area Remodel",
+      "Walk-In Tubs & Mobility Showers",
+      "4-Season Sunroom / Patio Enclosure",
+    ]);
+    renderStudioTradeChips();
+  };
+  document.getElementById("presetAllTradesBtn").onclick = () => {
+    state.selectedStudioTrades = new Set(state.tradesCatalog.map((t) => t.name));
+    renderStudioTradeChips();
+  };
+  document.getElementById("presetClearTradesBtn").onclick = () => {
+    state.selectedStudioTrades = new Set();
+    renderStudioTradeChips();
+  };
+
+  // Support ?studio=1 deep link for Adriano
+  if (!state.isInviteMode && urlParams.get("studio") === "1") {
+    switchView("view-studio");
+  }
 }
 
 initApp().catch((err) => {
