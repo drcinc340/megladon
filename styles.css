@@ -896,6 +896,99 @@ html, body {
   color: #fde68a;
 }
 
+/* Multi-Tenant Prospect Studio & White-Label Controls */
+.founder-preview-bar {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.22), rgba(14, 165, 233, 0.18));
+  border-bottom: 1px solid rgba(245, 158, 11, 0.55);
+  padding: 9px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.82rem;
+  z-index: 95;
+}
+
+.prospect-trial-card {
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.12), rgba(14, 165, 233, 0.08));
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-md);
+  padding: 11px 12px;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.trade-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.trade-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(5, 8, 17, 0.72);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  padding: 8px 11px;
+  font-size: 0.79rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.trade-chip:hover {
+  border-color: var(--border-cyan);
+  color: var(--text-main);
+}
+
+.trade-chip.checked {
+  background: rgba(14, 165, 233, 0.16);
+  border-color: var(--cyan);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.trade-chip input {
+  accent-color: var(--cyan);
+}
+
+.studio-invite-banner {
+  background: linear-gradient(145deg, rgba(16, 185, 129, 0.14), rgba(14, 165, 233, 0.12));
+  border: 1px solid rgba(16, 185, 129, 0.45);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.status-flagship { background: rgba(14, 165, 233, 0.2); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.45); }
+.status-trial { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.45); }
+.status-client { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.45); }
+.status-paused { background: rgba(244, 63, 94, 0.2); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.45); }
+
+.nav-btn-studio {
+  border: 1px dashed rgba(245, 158, 11, 0.45) !important;
+  color: #fde68a !important;
+}
+.nav-btn-studio.active {
+  background: rgba(245, 158, 11, 0.18) !important;
+  border-style: solid !important;
+  color: #ffffff !important;
+}
+
 /* Responsive Mobile & Tablet */
 @media (max-width: 1080px) {
   .cockpit-layout {
