@@ -14,13 +14,25 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
+  <!-- Founder Preview Bar (Only visible when Adriano previews a prospect sandbox) -->
+  <div class="founder-preview-bar" id="founderPreviewBar" style="display:none;">
+    <div>
+      <strong style="color:var(--gold);">👑 FOUNDER PREVIEW MODE:</strong>
+      <span>Viewing <strong id="previewCompanyLabel" style="color:#fff;">Prospect</strong> exactly as their reps &amp; leadership see it.</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="btn btn-ghost btn-sm" id="previewCopyLinkBtn">📋 Copy Their Invite Link</button>
+      <button class="btn btn-gold btn-sm" id="exitPreviewBtn">← Return to Dinverno HQ</button>
+    </div>
+  </div>
+
   <!-- Mobile Header -->
   <header class="mobile-topbar">
     <div style="display:flex;align-items:center;gap:10px;">
       <img src="./assets/megladon-emblem.jpg" alt="Megladon" style="width:36px;height:36px;border-radius:9px;border:1px solid var(--border-cyan);" />
       <div>
         <div style="font-weight:900;letter-spacing:0.07em;font-size:1rem;">MEGLADON</div>
-        <div style="font-size:0.66rem;color:var(--text-secondary);">Dinverno Remodeling Sales Dojo</div>
+        <div id="mobileBrandSub" style="font-size:0.66rem;color:var(--text-secondary);">Dinverno Remodeling Sales Dojo</div>
       </div>
     </div>
     <button class="btn btn-ghost btn-sm" id="mobileMenuBtn">☰ Menu</button>
@@ -33,7 +45,7 @@
         <img src="./assets/megladon-emblem.jpg" alt="Megladon Crest" class="brand-emblem" />
         <div>
           <div class="brand-title">MEGLADON</div>
-          <div class="brand-sub">Apex AI Sales Coach</div>
+          <div class="brand-sub" id="sidebarBrandSub">Apex AI Sales Coach</div>
         </div>
       </div>
 
@@ -52,6 +64,9 @@
           <div class="xp-bar-fill" id="repXpFill" style="width:12%;"></div>
         </div>
       </div>
+
+      <!-- Prospect Sandbox Trial Meter (Only visible to invited prospects) -->
+      <div class="prospect-trial-card" id="prospectTrialBox" style="display:none;"></div>
 
       <!-- Navigation -->
       <nav class="nav-menu">
@@ -75,27 +90,34 @@
           <span class="nav-icon">🏆</span>
           <span>Command Center</span>
         </button>
+        <!-- Adriano's Multi-Company Prospect & White-Label Studio (Hidden from invite links) -->
+        <button class="nav-btn nav-btn-studio" data-view="view-studio" id="navProspectStudioBtn">
+          <span class="nav-icon">🏢</span>
+          <span>Prospect Studio</span>
+        </button>
       </nav>
 
       <div class="sidebar-footer">
-        <strong style="color:#e2e8f0;">Dinverno Remodeling and Construction</strong><br />
-        Office: +1 (248) 431-4609<br />
+        <strong id="sidebarCompanyName" style="color:#e2e8f0;">Dinverno Remodeling and Construction</strong><br />
+        Office: <span id="sidebarCompanyPhone">+1 (248) 431-4609</span><br />
         <span id="voiceEngineBadge" style="color:var(--emerald);font-weight:600;">● Neural Voice Ready</span>
       </div>
     </aside>
 
     <!-- Main Content -->
     <main class="main-area">
+      <!-- Access Paused / Expired Banner if applicable -->
+      <div id="accessBlockedBanner" class="card" style="display:none;border-color:rgba(245,158,11,0.55);background:rgba(245,158,11,0.1);margin-bottom:18px;"></div>
+
       <!-- ================================================================
            VIEW 1: ROLEPLAY ARENA (SETUP + LIVE COCKPIT)
       ================================================================= -->
       <section class="view-section active" id="view-arena">
-        <!-- SETUP STATE -->
         <div id="arenaSetup">
           <div class="page-header">
             <div>
               <h1 class="page-title">🦈 In-Home Consultation Roleplay Arena</h1>
-              <p class="page-subtitle">Train live by voice or text against hyper-realistic Southeast Michigan homeowners. Unlock hidden emotional drivers, hold your margin, and earn the close.</p>
+              <p class="page-subtitle" id="arenaPageSubtitle">Train live by voice or text against hyper-realistic Southeast Michigan homeowners. Unlock hidden emotional drivers, hold your margin, and earn the close.</p>
             </div>
           </div>
 
@@ -108,7 +130,7 @@
 
           <div class="setup-controls-bar">
             <div class="field-group">
-              <label for="setupTrade">2. DRC Project Trade & Scope</label>
+              <label for="setupTrade" id="setupTradeLabel">2. DRC Project Trade &amp; Scope</label>
               <select id="setupTrade" class="input-ctrl"></select>
             </div>
             <div class="field-group">
@@ -121,7 +143,7 @@
             </div>
             <div class="field-group">
               <label for="setupCustomContext">4. Optional Custom Deal Twist</label>
-              <input id="setupCustomContext" type="text" class="input-ctrl" placeholder="e.g., Roof insurance claim denied, corner lot..." />
+              <input id="setupCustomContext" type="text" class="input-ctrl" placeholder="e.g., Insurance claim denied, HOA deadline, corner lot..." />
             </div>
             <div>
               <button class="btn btn-gold" id="launchFullSitBtn" style="width:100%;height:44px;font-size:0.96rem;">
@@ -158,7 +180,7 @@
                     🆘 Coach Rescue
                   </button>
                   <button class="btn btn-gold btn-sm" id="finishSitBtn">
-                    🏁 Finish & Grade
+                    🏁 Finish &amp; Grade
                   </button>
                   <button class="btn btn-danger btn-sm" id="exitSitBtn">
                     ✕ Exit
@@ -192,7 +214,6 @@
 
             <!-- Right: Telemetry & Coach Earpiece HUD -->
             <div class="hud-stack">
-              <!-- Live Mathematical Close Gauges -->
               <div class="hud-card">
                 <div class="hud-title">
                   <span>🎯 Live Buying Gauges</span>
@@ -280,9 +301,9 @@
                 </div>
               </div>
 
-              <!-- DRC Trade Cheat Sheet -->
+              <!-- Company Trade Cheat Sheet -->
               <div class="hud-card">
-                <div class="hud-title"><span>📋 DRC Tiers & Michigan Code</span></div>
+                <div class="hud-title"><span id="hudTradeTitle">📋 DRC Tiers &amp; Local Code</span></div>
                 <div id="hudTradeCheatSheet" style="font-size:0.78rem;color:var(--text-secondary);line-height:1.5;"></div>
               </div>
             </div>
@@ -313,18 +334,13 @@
       <section class="view-section" id="view-coach">
         <div class="page-header">
           <div>
-            <h1 class="page-title">🧠 Live Deal Rehash & Script Strategist</h1>
+            <h1 class="page-title">🧠 Live Deal Rehash &amp; Script Strategist</h1>
             <p class="page-subtitle">Sitting in the truck outside a real appointment? Describe the homeowner's pushback and get instant word-for-word closing scripts + copy-ready follow-up texts.</p>
           </div>
         </div>
 
         <div class="card" style="margin-bottom:18px;">
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;" id="quickCoachPrompts">
-            <button class="btn btn-ghost btn-sm coach-preset" data-q="I'm in Troy quoting a $23,490 Better Basement Waterproofing job. Husband says a guy on Facebook quoted $11,000 cash and wants to think about it. Give me the exact kitchen-table script and follow-up text.">💧 $11k Cash Lowballer (Waterproofing)</button>
-            <button class="btn btn-ghost btn-sm coach-preset" data-q="Birmingham couple loved our $88,200 4-Season Sunroom design, nodded the whole time, then said 'We never sign on the first visit, email us the quote and we'll reconnect in spring.' How do I save this deal right now?">☀️ "Never Sign First Visit / Wait Till Spring" (Sunroom)</button>
-            <button class="btn btn-ghost btn-sm coach-preset" data-q="Homeowner in Novi is an automotive engineer asking me to break down our $20,790 roof replacement into exact Home Depot material cost vs labor hours. Give me the exact calm rebuttal.">📐 Engineer Demanding Material/Labor Split (Roofing)</button>
-            <button class="btn btn-ghost btn-sm coach-preset" data-q="I arrived for a $53,000 Kitchen consultation in Royal Oak and only the husband is home—he says his wife is at her sister's and wants me to just write down the numbers for him. Walk me through step-by-step how to play this.">📱 One-Legger Spouse Missing (Kitchen)</button>
-          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;" id="quickCoachPrompts"></div>
 
           <div style="display:grid;grid-template-columns:260px 1fr;gap:12px;margin-bottom:12px;">
             <div>
@@ -338,7 +354,7 @@
           </div>
 
           <div style="display:flex;justify-content:flex-end;">
-            <button class="btn btn-gold" id="askCoachSubmitBtn">🦈 Generate Battle Plan & Scripts</button>
+            <button class="btn btn-gold" id="askCoachSubmitBtn">🦈 Generate Battle Plan &amp; Scripts</button>
           </div>
         </div>
 
@@ -351,15 +367,15 @@
       <section class="view-section" id="view-playbook">
         <div class="page-header">
           <div>
-            <h1 class="page-title">📚 Home Improvement Sales Masters Vault & Jeremy Miner NEPQ Dojo</h1>
-            <p class="page-subtitle">Distilled closing DNA from Jeremy Miner (7th Level NEPQ), Dave Yoho, Rodney Webb, Grosso University, Brian Gottlieb, Chris Voss, Rilla Telemetry, and Dinverno Remodeling and Construction.</p>
+            <h1 class="page-title">📚 Home Improvement Sales Masters Vault &amp; Jeremy Miner NEPQ Dojo</h1>
+            <p class="page-subtitle" id="playbookPageSubtitle">Distilled closing DNA from Jeremy Miner (7th Level NEPQ), Dave Yoho, Rodney Webb, Grosso University, Brian Gottlieb, Chris Voss, Rilla Telemetry, and Dinverno Remodeling and Construction.</p>
           </div>
         </div>
 
-        <h3 style="margin-bottom:12px;color:#34d399;font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em;">🎯 Jeremy Miner's 7th Level NEPQ — 5-Stage Question & Tonality Arsenal</h3>
+        <h3 style="margin-bottom:12px;color:#34d399;font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em;">🎯 Jeremy Miner's 7th Level NEPQ — 5-Stage Question &amp; Tonality Arsenal</h3>
         <div class="grid-2" id="nepqArsenalGrid" style="margin-bottom:28px;"></div>
 
-        <h3 style="margin-bottom:12px;color:var(--gold);font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em;">The 8-Step DRC Megladon Consultation Roadmap</h3>
+        <h3 id="stagesRoadmapTitle" style="margin-bottom:12px;color:var(--gold);font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em;">The 8-Step Megladon Consultation Roadmap</h3>
         <div class="grid-3" id="stagesRoadmapGrid" style="margin-bottom:28px;"></div>
 
         <h3 style="margin-bottom:12px;color:var(--cyan);font-size:0.95rem;text-transform:uppercase;letter-spacing:0.06em;">8 Elite Methodologies Baked Into Megladon</h3>
@@ -367,13 +383,13 @@
       </section>
 
       <!-- ================================================================
-           VIEW 5: ADRIANO'S EXECUTIVE COMMAND CENTER & LEADERBOARD
+           VIEW 5: EXECUTIVE COMMAND CENTER & LEADERBOARD
       ================================================================= -->
       <section class="view-section" id="view-command">
         <div class="page-header">
           <div>
-            <h1 class="page-title">🏆 Executive Command Center & Team Leaderboard</h1>
-            <p class="page-subtitle">Track DRC rep readiness, review Film-Room scorecards & transcripts, and assign targeted objection drills across the team.</p>
+            <h1 class="page-title">🏆 Executive Command Center &amp; Team Leaderboard</h1>
+            <p class="page-subtitle" id="commandPageSubtitle">Track rep readiness, review Film-Room scorecards &amp; transcripts, and assign targeted objection drills across the team.</p>
           </div>
           <button class="btn btn-ghost btn-sm" id="refreshAnalyticsBtn">↻ Refresh Telemetry</button>
         </div>
@@ -381,7 +397,7 @@
         <div class="grid-2" style="margin-bottom:22px;">
           <!-- Leaderboard -->
           <div class="card">
-            <h3 style="margin-bottom:12px;font-size:1rem;">🦈 DRC Closer Standings</h3>
+            <h3 id="leaderboardHeading" style="margin-bottom:12px;font-size:1rem;">🦈 Closer Standings</h3>
             <div style="overflow-x:auto;">
               <table class="leader-table" id="leaderboardTable">
                 <thead>
@@ -401,7 +417,7 @@
 
           <!-- Assign Drill Box -->
           <div class="card">
-            <h3 style="margin-bottom:12px;font-size:1rem;">🎯 Dispatch Mandatory Rep Drill (Adriano Coach Control)</h3>
+            <h3 style="margin-bottom:12px;font-size:1rem;">🎯 Dispatch Mandatory Rep Drill</h3>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
               <div class="field-group">
                 <label>Assign To Rep</label>
@@ -447,14 +463,14 @@
 
         <!-- Recent Film Room Sessions -->
         <div class="card">
-          <h3 style="margin-bottom:12px;font-size:1rem;">🎬 Film-Room Session Archive (Click Any Sit to Inspect Scorecard & Transcript)</h3>
+          <h3 style="margin-bottom:12px;font-size:1rem;">🎬 Film-Room Session Archive (Click Any Sit to Inspect Scorecard &amp; Transcript)</h3>
           <div style="overflow-x:auto;">
             <table class="leader-table" id="recentSessionsTable">
               <thead>
                 <tr>
                   <th>Closer</th>
                   <th>Mode</th>
-                  <th>Homeowner & Trade</th>
+                  <th>Homeowner &amp; Trade</th>
                   <th>Trust</th>
                   <th>Score</th>
                   <th>Outcome</th>
@@ -463,6 +479,170 @@
               </thead>
               <tbody></tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 6: ADRIANO'S PROSPECT & WHITE-LABEL CLIENT STUDIO
+      ================================================================= -->
+      <section class="view-section" id="view-studio">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">🏢 Prospect Sandbox &amp; White-Label Client Studio</h1>
+            <p class="page-subtitle">Spin up private, custom-branded MEGLADON portals for prospective home improvement companies in seconds. Give them live demo access tailored to their exact trades &amp; market, track their usage, and convert them into full clients.</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="refreshStudioBtn">↻ Refresh Portals</button>
+        </div>
+
+        <!-- Founder PIN Gate -->
+        <div id="studioLockGate" class="card" style="max-width:480px;margin:28px auto;text-align:center;padding:28px;">
+          <div style="font-size:2.2rem;margin-bottom:8px;">👑</div>
+          <h2 style="font-size:1.2rem;margin-bottom:6px;">Founder Studio Authorization</h2>
+          <p style="font-size:0.84rem;color:var(--text-secondary);margin-bottom:16px;">Enter Adriano Vagnini's Founder PIN to create &amp; manage prospective company portals.</p>
+          <div style="display:flex;gap:8px;justify-content:center;">
+            <input id="founderPinInput" type="password" class="input-ctrl" style="max-width:180px;text-align:center;font-size:1.05rem;letter-spacing:0.2em;" placeholder="••••" />
+            <button class="btn btn-gold" id="unlockStudioBtn">Unlock Studio</button>
+          </div>
+        </div>
+
+        <!-- Unlocked Studio Workspace -->
+        <div id="studioWorkspace" style="display:none;">
+          <!-- Newly Created / Active Share Banner -->
+          <div id="studioInviteResult" class="studio-invite-banner" style="display:none;"></div>
+
+          <!-- Builder Card -->
+          <div class="card" style="margin-bottom:24px;border-color:rgba(245,158,11,0.32);">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+              <h3 style="font-size:1.08rem;color:var(--gold);">🚀 Spin Up Custom Prospective Company Portal</h3>
+              <span style="font-size:0.75rem;color:var(--text-secondary);">100% Isolated Data • Custom Branding &amp; Trades • Private Invite Link</span>
+            </div>
+
+            <div class="grid-3" style="margin-bottom:12px;">
+              <div class="field-group">
+                <label>Prospective Company Name *</label>
+                <input id="newCompName" type="text" class="input-ctrl" placeholder="e.g., Sunbelt Windows &amp; Bath" />
+              </div>
+              <div class="field-group">
+                <label>Market / City &amp; State *</label>
+                <input id="newCompRegion" type="text" class="input-ctrl" placeholder="e.g., Tampa Bay, FL or Dallas, TX" />
+              </div>
+              <div class="field-group">
+                <label>Company Public Phone</label>
+                <input id="newCompPhone" type="text" class="input-ctrl" placeholder="e.g., (813) 555-0190" />
+              </div>
+            </div>
+
+            <div class="grid-3" style="margin-bottom:12px;">
+              <div class="field-group">
+                <label>Prospect Owner / VP Sales Name</label>
+                <input id="newCompContactName" type="text" class="input-ctrl" placeholder="e.g., Mike Ross" />
+              </div>
+              <div class="field-group">
+                <label>Prospect Email (For Tracked Invite)</label>
+                <input id="newCompContactEmail" type="email" class="input-ctrl" placeholder="e.g., mike@company.com" />
+              </div>
+              <div class="field-group">
+                <label>Prospect Mobile (For SMS Link)</label>
+                <input id="newCompContactPhone" type="text" class="input-ctrl" placeholder="e.g., 813-555-0144" />
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px;">
+              <div class="field-group">
+                <label>Access Tier</label>
+                <select id="newCompPlanType" class="input-ctrl">
+                  <option value="trial" selected>🎁 Prospect Demo Sandbox (Capped)</option>
+                  <option value="client">🏆 Full Client Portal (Unlimited)</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Complimentary Sit Limit</label>
+                <select id="newCompMaxSessions" class="input-ctrl">
+                  <option value="10">10 Demo Sits</option>
+                  <option value="25" selected>25 Demo Sits (Recommended)</option>
+                  <option value="50">50 Demo Sits</option>
+                  <option value="0">Unlimited Sits</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Trial Expiration</label>
+                <select id="newCompTrialDays" class="input-ctrl">
+                  <option value="7">7 Days</option>
+                  <option value="14" selected>14 Days</option>
+                  <option value="30">30 Days</option>
+                  <option value="0">Never Expires</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label>Portal Brand Accent</label>
+                <select id="newCompColor" class="input-ctrl">
+                  <option value="#0ea5e9" selected>🌊 Megladon Cyan (#0EA5E9)</option>
+                  <option value="#f59e0b">👑 Apex Gold (#F59E0B)</option>
+                  <option value="#10b981">🌲 Emerald Growth (#10B981)</option>
+                  <option value="#8b5cf6">⚡ Royal Violet (#8B5CF6)</option>
+                  <option value="#ef4444">🔥 Crimson Impact (#EF4444)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-2" style="margin-bottom:14px;">
+              <div class="field-group">
+                <label>Pre-Loaded Rep Seats (Comma-Separated Optional)</label>
+                <input id="newCompStarterReps" type="text" class="input-ctrl" placeholder="e.g., Mike Ross (VP Sales), Chris Taylor (Closer), Sarah Lee (Closer)" />
+              </div>
+              <div class="field-group">
+                <label>Custom Trades Not Listed Below (Comma-Separated Optional)</label>
+                <input id="newCompCustomTrades" type="text" class="input-ctrl" placeholder="e.g., Hurricane Lanai Cages, Whole-Home Generators" />
+              </div>
+            </div>
+
+            <!-- 18-Trade Selector -->
+            <div style="margin-bottom:14px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                <label style="font-size:0.78rem;font-weight:800;color:#e2e8f0;text-transform:uppercase;letter-spacing:0.05em;">
+                  Select Trades This Company Sells:
+                </label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                  <button type="button" class="btn btn-ghost btn-sm" id="presetExteriorsBtn">🏠 Exteriors Pack</button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="presetInteriorsBtn">🛁 Kitchen &amp; Bath Pack</button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="presetAllTradesBtn">✓ Select All</button>
+                  <button type="button" class="btn btn-ghost btn-sm" id="presetClearTradesBtn">✕ Clear</button>
+                </div>
+              </div>
+              <div class="trade-chip-grid" id="studioTradeChips"></div>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding-top:12px;border-top:1px solid var(--border-subtle);">
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.83rem;color:#cbd5e1;cursor:pointer;">
+                <input type="checkbox" id="newCompAiTailor" checked />
+                <span>✨ <strong>AI Auto-Tailor</strong> local suburbs, regional weather pain &amp; building codes (~2s)</span>
+              </label>
+              <button class="btn btn-gold" id="createCompanyBtn" style="padding:11px 22px;font-size:0.95rem;">
+                🦈 Build Company Sandbox &amp; Get Private Link
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Portals Pipeline Table -->
+          <div class="card">
+            <h3 style="margin-bottom:12px;font-size:1.05rem;">📊 Active Prospective Companies &amp; Client Portals</h3>
+            <div style="overflow-x:auto;">
+              <table class="leader-table" id="companiesPipelineTable">
+                <thead>
+                  <tr>
+                    <th>Company &amp; Market</th>
+                    <th>Configured Trades</th>
+                    <th>Status</th>
+                    <th>Link Opens</th>
+                    <th>Sits Used</th>
+                    <th>Avg Score</th>
+                    <th>Controls &amp; Access</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -481,6 +661,13 @@
   =================================================================== -->
   <div class="modal-backdrop" id="objectionStudyModal">
     <div class="modal-panel" id="objectionStudyBody"></div>
+  </div>
+
+  <!-- ==================================================================
+       SHARE INVITE / UPGRADE MODAL
+  =================================================================== -->
+  <div class="modal-backdrop" id="shareCompanyModal">
+    <div class="modal-panel" id="shareCompanyModalBody" style="max-width:600px;"></div>
   </div>
 
   <script src="./app.js"></script>
