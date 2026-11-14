@@ -107,10 +107,13 @@ async function resolveApiBase() {
     return;
   }
   try {
-    const r = await fetch("/api/status", { signal: AbortSignal.timeout(2500) });
+    const r = await fetch("./api/status", { signal: AbortSignal.timeout(2500) });
     if (r.ok) {
-      state.apiBase = "";
-      return;
+      const data = await r.json().catch(() => null);
+      if (data && (data.service === "megladon" || String(data.app || "").includes("MEGLADON"))) {
+        state.apiBase = window.location.pathname.replace(/\/index\.html$/i, "").replace(/\/+$/, "");
+        return;
+      }
     }
   } catch (_) {}
 
